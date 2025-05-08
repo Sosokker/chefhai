@@ -1,3 +1,4 @@
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import { Feather, FontAwesome, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
@@ -15,56 +16,59 @@ import {
 } from "react-native";
 
 // Sample recipe data
-const recipeData = [
+const foodHighlights = [
   {
     id: 1,
-    title: "Pad Kra Pao Moo Sab with Eggs",
-    image:
-      "/placeholder.svg?height=400&width=400&query=thai basil stir fry with egg and rice",
-    color: "#ffd60a",
+    name: "Pad Kra Pao Moo Sab with Eggs",
+    image: require("@/assets/images/food/padkrapao.jpg"),
+    description: "Thai stir-fry with ground pork and holy basil",
+    time: "30 Mins",
+    calories: "520 kcal",
   },
   {
     id: 2,
-    title: "Chicken Curry",
-    image:
-      "/placeholder.svg?height=400&width=400&query=chicken curry with rice",
-    color: "#ffd60a",
+    name: "Jjajangmyeon",
+    image: require("@/assets/images/food/jjajangmyeon.jpg"),
+    description: "Korean black bean noodles",
+    time: "45 Mins",
+    calories: "650 kcal",
   },
   {
     id: 3,
-    title: "Beef Steak",
-    image:
-      "/placeholder.svg?height=400&width=400&query=beef steak with vegetables",
-    color: "#bb0718",
+    name: "Ramen",
+    image: require("@/assets/images/food/ramen.jpg"),
+    description: "Japanese noodle soup",
+    time: "60 Mins",
+    calories: "480 kcal",
   },
   {
     id: 4,
-    title: "Vegetable Pasta",
-    image: "/placeholder.svg?height=400&width=400&query=vegetable pasta",
-    color: "#ffd60a",
-  },
-  {
-    id: 5,
-    title: "Salmon Sushi",
-    image: "/placeholder.svg?height=400&width=400&query=salmon sushi",
-    color: "#ffd60a",
+    name: "Beef Wellington",
+    image: require("@/assets/images/food/beef.jpg"),
+    description: "Tender beef wrapped in puff pastry",
+    time: "90 Mins",
+    calories: "750 kcal",
   },
 ];
 
+const navigateToFoodDetail = (foodId: string) => {
+  router.push({ pathname: "/food/[id]", params: { id: foodId } });
+};
+
 export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredRecipes, setFilteredRecipes] = useState(recipeData);
+  const [filteredRecipes, setFilteredRecipes] = useState(foodHighlights);
 
   // Handle search
   const handleSearch = (text: string): void => {
     setSearchQuery(text);
     if (text) {
-      const filtered = recipeData.filter((recipe: Recipe) =>
-        recipe.title.toLowerCase().includes(text.toLowerCase())
+      const filtered = foodHighlights.filter((food) =>
+        food.name.toLowerCase().includes(text.toLowerCase())
       );
       setFilteredRecipes(filtered);
     } else {
-      setFilteredRecipes(recipeData);
+      setFilteredRecipes(foodHighlights);
     }
   };
 
@@ -214,45 +218,58 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Highlights Section */}
-        <View className="px-6 mb-6">
-          <View className="flex-row items-center mb-4">
-            <Text className="text-2xl font-bold mr-2">Highlights</Text>
-            <FontAwesome name="star" size={20} color="#ffd60a" />
+        {/* Food Highlights Section */}
+        <View className="mx-4 mb-6">
+          <View className="flex-row items-center mb-3">
+            <Text className="text-lg font-bold text-[#333] mr-2">
+              Food Highlights
+            </Text>
+            <IconSymbol name="star.fill" size={16} color="#FFCC00" />
           </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="mb-4"
-          >
-            <View className="flex-row">
-              {filteredRecipes.slice(0, 3).map((recipe) => (
-                <TouchableOpacity
-                  key={recipe.id}
-                  className={`w-36 h-40 bg-[${recipe.color}] rounded-xl mr-3 overflow-hidden`}
-                  onPress={() => goToRecipeDetail(recipe)}
-                >
-                  <Image
-                    source={{ uri: recipe.image }}
-                    className="w-full h-full opacity-70"
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-
-          <View className="flex-row">
-            {filteredRecipes.slice(3, 5).map((recipe) => (
+          <View className="w-full">
+            {foodHighlights.map((food) => (
               <TouchableOpacity
-                key={recipe.id}
-                className={`w-36 h-40 bg-[${recipe.color}] rounded-xl mr-3 overflow-hidden`}
-                onPress={() => goToRecipeDetail(recipe)}
+                key={food.id}
+                className="flex-row bg-white rounded-xl mb-3 shadow-sm overflow-hidden"
+                style={{
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+                onPress={() => navigateToFoodDetail(String(food.id))}
               >
                 <Image
-                  source={{ uri: recipe.image }}
-                  className="w-full h-full opacity-70"
+                  source={food.image}
+                  className="w-[88px] h-[88px] rounded-l-xl"
+                  resizeMode="cover"
                 />
+                <View className="flex-1 p-3 justify-between">
+                  <Text
+                    className="text-base font-bold text-[#333] mb-1"
+                    numberOfLines={1}
+                  >
+                    {food.name}
+                  </Text>
+                  <Text className="text-sm text-[#666] mb-2" numberOfLines={1}>
+                    {food.description}
+                  </Text>
+                  <View className="flex-row justify-between">
+                    <View className="flex-row items-center">
+                      <IconSymbol name="clock" size={12} color="#666666" />
+                      <Text className="text-xs text-[#666] ml-1">
+                        {food.time}
+                      </Text>
+                    </View>
+                    <View className="flex-row items-center">
+                      <IconSymbol name="flame" size={12} color="#666666" />
+                      <Text className="text-xs text-[#666] ml-1">
+                        {food.calories}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
