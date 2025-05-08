@@ -2,7 +2,6 @@ import { IconSymbol } from "@/components/ui/IconSymbol";
 import { Image } from "expo-image";
 import {
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -51,42 +50,47 @@ export default function RecipesScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView style={styles.scrollView}>
+    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+      <ScrollView className="flex-1">
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
+        <View className="flex-row items-center mx-4 mt-2 mb-4 px-3 h-10 bg-white rounded-full border border-gray-300">
           <IconSymbol name="magnifyingglass" size={20} color="#FF0000" />
           <TextInput
-            style={styles.searchInput}
+            className="flex-1 ml-2 text-[#333]"
             placeholder="Search"
             placeholderTextColor="#FF0000"
           />
         </View>
 
         {/* Filter Buttons */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity style={styles.yellowButton}>
-            <Text style={styles.buttonText}>All Recipes</Text>
+        <View className="flex-row mx-4 mb-4">
+          <TouchableOpacity className="flex-1 bg-[#FFCC00] py-3 rounded-lg mr-2 items-center">
+            <Text className="font-bold text-[#333]">All Recipes</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.redButton}>
-            <Text style={styles.redButtonText}>My Recipes</Text>
+          <TouchableOpacity className="flex-1 bg-red-600 py-3 rounded-lg items-center">
+            <Text className="font-bold text-white">My Recipes</Text>
           </TouchableOpacity>
         </View>
 
         {/* Divider */}
-        <View style={styles.divider} />
+        <View className="h-px bg-[#EEEEEE] mx-4 mb-4" />
 
         {/* Food Grid */}
-        <View style={styles.foodGrid}>
+        <View className="flex-row flex-wrap p-2">
           {foodItems.map((item) => (
-            <View key={item.id} style={styles.foodItem}>
+            <View key={item.id} className="w-1/2 p-2 relative">
               <Image
                 source={item.image}
-                style={styles.foodImage}
-                contentFit="cover"
+                className="w-full h-[120px] rounded-lg"
+                resizeMode="cover"
               />
-              <View style={[styles.foodLabel, { backgroundColor: item.color }]}>
-                <Text style={styles.foodLabelText}>{item.name}</Text>
+              <View
+                className="absolute bottom-4 left-4 py-1 px-2 rounded bg-opacity-90"
+                style={{ backgroundColor: item.color }}
+              >
+                <Text className="text-[#333] font-bold text-xs">
+                  {item.name}
+                </Text>
               </View>
             </View>
           ))}
@@ -95,93 +99,3 @@ export default function RecipesScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    height: 40,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#DDDDDD",
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    color: "#333333",
-  },
-  filterContainer: {
-    flexDirection: "row",
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  yellowButton: {
-    flex: 1,
-    backgroundColor: "#FFCC00",
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginRight: 8,
-    alignItems: "center",
-  },
-  redButton: {
-    flex: 1,
-    backgroundColor: "#FF0000",
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  buttonText: {
-    fontWeight: "bold",
-    color: "#333333",
-  },
-  redButtonText: {
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#EEEEEE",
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  foodGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    padding: 8,
-  },
-  foodItem: {
-    width: "50%",
-    padding: 8,
-    position: "relative",
-  },
-  foodImage: {
-    width: "100%",
-    height: 120,
-    borderRadius: 8,
-  },
-  foodLabel: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-  },
-  foodLabelText: {
-    color: "#333333",
-    fontWeight: "bold",
-    fontSize: 12,
-  },
-});
