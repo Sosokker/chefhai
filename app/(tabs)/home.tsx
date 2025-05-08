@@ -52,7 +52,7 @@ const foodHighlights = [
 ];
 
 const navigateToFoodDetail = (foodId: string) => {
-  router.push({ pathname: "/food/[id]", params: { id: foodId } });
+  router.push({ pathname: "/recipe-detail", params: { id: foodId } });
 };
 
 export default function HomeScreen() {
@@ -217,14 +217,11 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Food Highlights Section */}
-        <View className="mx-4 mb-6">
-          <View className="flex-row items-center mb-3">
-            <Text className="text-lg font-bold text-[#333] mr-2">
-              Food Highlights
-            </Text>
-            <IconSymbol name="star.fill" size={16} color="#FFCC00" />
+        {/* Highlights Section */}
+        <View className="px-6 mb-6">
+          <View className="flex-row items-center mb-4">
+            <Text className="text-2xl font-bold mr-2">Highlights</Text>
+            <FontAwesome name="star" size={20} color="#ffd60a" />
           </View>
           <View className="w-full">
             {foodHighlights.map((food) => (
