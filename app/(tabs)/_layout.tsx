@@ -1,6 +1,6 @@
+import { useAuth } from "@/context/auth-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Tabs, Redirect } from "expo-router";
-import { useAuth } from ".././context/auth-context";
+import { Redirect, Tabs } from "expo-router";
 
 export default function TabLayout() {
   const { isAuthenticated, isLoading } = useAuth();
