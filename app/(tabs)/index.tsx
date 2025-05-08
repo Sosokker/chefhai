@@ -147,17 +147,47 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* Center Image */}
-        <View className="items-center justify-center my-8">
-          <View className="w-32 h-32 items-center justify-center bg-[#fff5e6] rounded-full">
-            <View className="flex-row items-center">
-              <View className="absolute flex-row">
-                <Image 
-                  source={{ uri: "/placeholder.svg?height=60&width=60&query=orange fruit with green leaf" }}
-                  className="w-14 h-14"
-                />
-              </View>
+                {/* Show your dishes */}
+                <View className="px-6 mb-6">
+          <View className="flex-row items-center mb-4">
+            <Text className="text-2xl font-bold mr-2">Show your dishes</Text>
+            <Feather name="wifi" size={20} color="black" />
+          </View>
+          
+          <View className="bg-white border border-gray-300 rounded-full mb-6 flex-row items-center px-4 py-3">
+            <TextInput 
+              className="flex-1"
+              placeholder="Search..."
+              value={searchQuery}
+              onChangeText={handleSearch}
+            />
+            <View className="bg-[#ffd60a] p-2 rounded-full">
+              <Feather name="send" size={20} color="black" />
             </View>
+          </View>
+          
+          <View className="flex-row justify-between">
+            <TouchableOpacity 
+              className="bg-[#ffd60a] p-4 rounded-xl w-[48%]"
+              onPress={takePhoto}
+            >
+              <View className="items-center">
+                <FontAwesome name="camera" size={24} color="black" />
+                <Text className="text-lg font-bold mt-2">From Camera</Text>
+                <Text className="text-sm text-gray-700">Straight from Camera</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              className="bg-[#f9be25] p-4 rounded-xl w-[48%]"
+              onPress={pickImage}
+            >
+              <View className="items-center">
+                <Feather name="image" size={24} color="black" />
+                <Text className="text-lg font-bold mt-2">From Gallery</Text>
+                <Text className="text-sm text-gray-700">Straight from Gallery</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
         
@@ -198,50 +228,6 @@ export default function HomeScreen() {
                 />
               </TouchableOpacity>
             ))}
-          </View>
-        </View>
-        
-        {/* Show your dishes */}
-        <View className="px-6 mb-6">
-          <View className="flex-row items-center mb-4">
-            <Text className="text-2xl font-bold mr-2">Show your dishes</Text>
-            <Feather name="wifi" size={20} color="black" />
-          </View>
-          
-          <View className="bg-white border border-gray-300 rounded-full mb-6 flex-row items-center px-4 py-3">
-            <TextInput 
-              className="flex-1"
-              placeholder="Search..."
-              value={searchQuery}
-              onChangeText={handleSearch}
-            />
-            <View className="bg-[#ffd60a] p-2 rounded-full">
-              <Feather name="send" size={20} color="black" />
-            </View>
-          </View>
-          
-          <View className="flex-row justify-between">
-            <TouchableOpacity 
-              className="bg-[#ffd60a] p-4 rounded-xl w-[48%]"
-              onPress={takePhoto}
-            >
-              <View className="items-center">
-                <FontAwesome name="camera" size={24} color="black" />
-                <Text className="text-lg font-bold mt-2">From Camera</Text>
-                <Text className="text-sm text-gray-700">Straight from Camera</Text>
-              </View>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              className="bg-[#f9be25] p-4 rounded-xl w-[48%]"
-              onPress={pickImage}
-            >
-              <View className="items-center">
-                <Feather name="image" size={24} color="black" />
-                <Text className="text-lg font-bold mt-2">From Gallery</Text>
-                <Text className="text-sm text-gray-700">Straight from Gallery</Text>
-              </View>
-            </TouchableOpacity>
           </View>
         </View>
         
