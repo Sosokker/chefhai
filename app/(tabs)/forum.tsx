@@ -2,7 +2,6 @@ import { IconSymbol } from "@/components/ui/IconSymbol";
 import { Image } from "expo-image";
 import {
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,63 +11,63 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ForumScreen() {
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView style={styles.scrollView}>
+    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+      <ScrollView className="flex-1">
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
+        <View className="flex-row items-center mx-4 mt-2 mb-4 px-3 h-10 bg-white rounded-full border border-gray-300">
           <IconSymbol name="magnifyingglass" size={20} color="#FF0000" />
           <TextInput
-            style={styles.searchInput}
+            className="flex-1 ml-2 text-[#333]"
             placeholder="Search"
             placeholderTextColor="#FF0000"
           />
         </View>
 
         {/* Category Filters */}
-        <View style={styles.categoryContainer}>
-          <TouchableOpacity style={styles.categoryButton}>
-            <Text style={styles.categoryText}>Main dish</Text>
+        <View className="flex-row justify-between mx-4 mb-4">
+          <TouchableOpacity className="bg-[#FFCC00] py-3 px-4 rounded-xl flex-1 mx-1 items-center">
+            <Text className="font-bold text-[#333]">Main dish</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.categoryButton}>
-            <Text style={styles.categoryText}>Dessert</Text>
+          <TouchableOpacity className="bg-[#FFCC00] py-3 px-4 rounded-xl flex-1 mx-1 items-center">
+            <Text className="font-bold text-[#333]">Dessert</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.categoryButton}>
-            <Text style={styles.categoryText}>Appetite</Text>
+          <TouchableOpacity className="bg-[#FFCC00] py-3 px-4 rounded-xl flex-1 mx-1 items-center">
+            <Text className="font-bold text-[#333]">Appetite</Text>
           </TouchableOpacity>
         </View>
 
         {/* Filter Options */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity style={styles.filterButton}>
-            <Text style={styles.filterText}>Rating</Text>
+        <View className="flex-row mx-4 mb-4">
+          <TouchableOpacity className="bg-red-600 py-2 px-3 rounded-full mr-2 flex-row items-center">
+            <Text className="text-white font-bold mr-1">Rating</Text>
             <IconSymbol name="star.fill" size={16} color="#FFCC00" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton}>
-            <Text style={styles.filterText}>Newest</Text>
+          <TouchableOpacity className="bg-red-600 py-2 px-3 rounded-full mr-2 flex-row items-center">
+            <Text className="text-white font-bold mr-1">Newest</Text>
             <IconSymbol name="calendar" size={16} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton}>
-            <Text style={styles.filterText}>Best</Text>
+          <TouchableOpacity className="bg-red-600 py-2 px-3 rounded-full mr-2 flex-row items-center">
+            <Text className="text-white font-bold mr-1">Best</Text>
             <IconSymbol name="flame.fill" size={16} color="#FFCC00" />
           </TouchableOpacity>
         </View>
 
         {/* Post */}
-        <View style={styles.postContainer}>
+        <View className="mx-4 mb-4 bg-white rounded-xl overflow-hidden border border-[#EEEEEE]">
           {/* User Info */}
-          <View style={styles.userInfoContainer}>
-            <View style={styles.userInfo}>
-              <View style={styles.userAvatar}>
+          <View className="flex-row justify-between items-center px-3 py-2">
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 rounded-full bg-gray-200 justify-center items-center mr-2">
                 <IconSymbol
                   name="person.circle.fill"
                   size={24}
                   color="#888888"
                 />
               </View>
-              <Text style={styles.userName}>Mr. Chef</Text>
+              <Text className="font-bold text-[#333]">Mr. Chef</Text>
             </View>
-            <View style={styles.ratingContainer}>
-              <Text style={styles.ratingText}>4.2</Text>
+            <View className="flex-row items-center">
+              <Text className="mr-1 font-bold text-[#333]">4.2</Text>
               <IconSymbol name="star.fill" size={16} color="#FFCC00" />
             </View>
           </View>
@@ -76,14 +75,16 @@ export default function ForumScreen() {
           {/* Post Image */}
           <Image
             source={require("@/assets/images/placeholder-food.jpg")}
-            style={styles.postImage}
-            contentFit="cover"
+            className="w-full h-[200px]"
+            resizeMode="cover"
           />
 
           {/* Post Content */}
-          <View style={styles.postContent}>
-            <Text style={styles.postTitle}>Kajjecaw</Text>
-            <Text style={styles.postDescription}>
+          <View className="p-3">
+            <Text className="text-base font-bold mb-1 text-[#333]">
+              Kajjecaw
+            </Text>
+            <Text className="text-[#666] text-sm">
               Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut at
               hendrerit enim. Etiam lacinia mi nec nunc ornare, vitae tempus leo
               aliquet...
@@ -91,24 +92,24 @@ export default function ForumScreen() {
           </View>
 
           {/* Post Actions */}
-          <View style={styles.postActions}>
-            <TouchableOpacity style={styles.actionButton}>
+          <View className="flex-row border-t border-[#EEEEEE] py-2 px-3">
+            <TouchableOpacity className="flex-row items-center mr-4">
               <IconSymbol
                 name="arrowshape.turn.up.left.fill"
                 size={16}
                 color="#888888"
               />
-              <Text style={styles.actionText}>3</Text>
+              <Text className="ml-1 text-[#888]">3</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity className="flex-row items-center mr-4">
               <IconSymbol name="text.bubble.fill" size={16} color="#888888" />
-              <Text style={styles.actionText}>2</Text>
+              <Text className="ml-1 text-[#888]">2</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity className="flex-row items-center mr-4">
               <IconSymbol name="heart.fill" size={16} color="#888888" />
-              <Text style={styles.actionText}>2</Text>
+              <Text className="ml-1 text-[#888]">2</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity className="flex-row items-center mr-4">
               <IconSymbol name="bookmark.fill" size={16} color="#888888" />
             </TouchableOpacity>
           </View>
@@ -117,144 +118,3 @@ export default function ForumScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    height: 40,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#DDDDDD",
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    color: "#333333",
-  },
-  categoryContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  categoryButton: {
-    backgroundColor: "#FFCC00",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    flex: 1,
-    marginHorizontal: 4,
-    alignItems: "center",
-  },
-  categoryText: {
-    fontWeight: "bold",
-    color: "#333333",
-  },
-  filterContainer: {
-    flexDirection: "row",
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  filterButton: {
-    backgroundColor: "#FF0000",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 8,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  filterText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    marginRight: 4,
-  },
-  postContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#EEEEEE",
-  },
-  userInfoContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  userInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-  },
-  userName: {
-    marginLeft: 8,
-    fontWeight: "bold",
-    color: "#333333",
-  },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  ratingText: {
-    marginRight: 4,
-    fontWeight: "bold",
-    color: "#333333",
-  },
-  postImage: {
-    width: "100%",
-    height: 200,
-  },
-  postContent: {
-    padding: 12,
-  },
-  postTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 4,
-    color: "#333333",
-  },
-  postDescription: {
-    color: "#666666",
-    fontSize: 14,
-  },
-  postActions: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#EEEEEE",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  actionText: {
-    marginLeft: 4,
-    color: "#666666",
-  },
-});
