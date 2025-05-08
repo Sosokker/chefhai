@@ -1,6 +1,8 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { FIREBASE_AUTH } from '../FirebaseConfig';
 
 type AuthContextType = {
   isAuthenticated: boolean;
@@ -43,13 +45,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const login = async (email: string, password: string) => {
     try {
-      // In a real app, you would validate credentials with a backend
-      await SecureStore.setItemAsync('userToken', 'dummy-auth-token');
+      const userCredential = await signInWithEmailAndPassword(FIREBASE_AUTH, email, password);
+      const user: User = userCredential.user;
+      const idToken = await user.getIdToken();
+      await SecureStore.setItemAsync('userToken', idToken);
       setAuthState({
         ...authState,
         isAuthenticated: true
       });
-      // Redirect to home tab specifically
       router.replace('../(tabs)/home');
     } catch (error) {
       console.error('Login error:', error);
@@ -59,13 +62,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const signup = async (name: string, email: string, password: string) => {
     try {
-      // In a real app, you would register the user with a backend
-      await SecureStore.setItemAsync('userToken', 'dummy-auth-token');
+      const userCredential = await createUserWithEmailAndPassword(FIREBASE_AUTH, email, password);
+      const user: User = userCredential.user;
+      const idToken = await user.getIdToken();
+      await SecureStore.setItemAsync('userToken', idToken);
       setAuthState({
         ...authState,
         isAuthenticated: true
       });
-      // Redirect to home tab specifically
       router.replace('./(tabs)/home');
     } catch (error) {
       console.error('Signup error:', error);
@@ -75,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const logout = async () => {
     try {
+      await signOut(FIREBASE_AUTH);
       await SecureStore.deleteItemAsync('userToken');
       setAuthState({
         ...authState,
