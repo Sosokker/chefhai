@@ -1,7 +1,15 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
+import { useAuth } from ".././context/auth-context";
 
 export default function TabLayout() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // If not authenticated and not loading, redirect to welcome
+  if (!isLoading && !isAuthenticated) {
+    return <Redirect href="/welcome" />;
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -28,7 +36,7 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: "Home",
           tabBarIcon: ({ color }) => (
