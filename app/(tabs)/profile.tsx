@@ -1,12 +1,58 @@
 "use client";
 
 import { Image } from "expo-image";
-import { useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useAuth } from "@/context/auth-context";
+import { getProfile } from "@/services/data/profile";
+import { supabase } from "@/services/supabase";
 
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState("Repost");
+  const [username, setUsername] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: userData, error: userError } =
+          await supabase.auth.getUser();
+        if (userError || !userData?.user?.id) {
+          setError("Unable to get user info.");
+          setUsername(null);
+          setLoading(false);
+          return;
+        }
+        const { data, error } = await getProfile(userData.user.id);
+        if (error) {
+          setError(error.message || "Failed to fetch profile");
+          setUsername(null);
+        } else {
+          setUsername(data?.username || null);
+        }
+      } catch (e: any) {
+        setError(e.message || "Unknown error");
+        setUsername(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (isAuthenticated) {
+      fetchProfile();
+    }
+  }, [isAuthenticated]);
 
   const foodItems = [
     {
@@ -69,7 +115,17 @@ export default function ProfileScreen() {
               <Text className="text-5xl">👨‍🍳</Text>
             </View>
           </View>
-          <Text className="text-xl font-bold mb-3">Mr. Chef</Text>
+          {loading ? (
+            <ActivityIndicator
+              size="small"
+              color="#bb0718"
+              style={{ marginBottom: 12 }}
+            />
+          ) : error ? (
+            <Text className="text-xl font-bold mb-3 text-red-600">{error}</Text>
+          ) : (
+            <Text className="text-xl font-bold mb-3">{username ?? "-"}</Text>
+          )}
           <TouchableOpacity className="bg-red-600 py-2 px-10 rounded-lg">
             <Text className="text-white font-bold">Edit</Text>
           </TouchableOpacity>
