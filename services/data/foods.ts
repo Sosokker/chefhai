@@ -1,19 +1,6 @@
 import { supabase } from "@/services/supabase";
+import { Foods, LikedFood, SavedFood } from "@/types";
 import { PostgrestError } from "@supabase/supabase-js";
-
-interface Foods {
-    id: string;
-    name: string;
-    description?: string;
-    time_to_cook_minutes: number;
-    skill_level: "Easy" | "Medium" | "Hard";
-    ingredient_count?: number;
-    calories?: number;
-    image_url?: string;
-    is_shared: boolean;
-    created_by: string;
-    created_at: string;
-}
 
 /**
  * Retrieves a list of foods based on the provided filters.
@@ -57,18 +44,6 @@ export const getFoods = async (
   const { data, error } = await query;
   return { data, error };
 };
-
-interface SavedFood {
-  user_id: string;
-  food_id: string;
-  created_at: string;
-}
-
-interface LikedFood {
-  user_id: string;
-  food_id: string;
-  created_at: string;
-}
 
 /**
  * Retrieves a list of saved foods for a specific user.
