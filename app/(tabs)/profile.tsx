@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -23,22 +23,21 @@ export default function ProfileScreen() {
   const { isAuthenticated } = useAuth();
   const isFocused = useIsFocused();
 
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let ignore = false;
-    async function getUser() {
-      const { data } = await supabase.auth.getUser();
-      if (!ignore) {
-        setUserId(data?.user?.id ?? null);
-      }
-    }
-    if (isAuthenticated) getUser();
-    else setUserId(null);
-    return () => {
-      ignore = true;
-    };
-  }, [isAuthenticated]);
+  const {
+    data: userData,
+    isLoading: isUserLoading,
+    error: userError,
+  } = useQuery({
+    queryKey: ["auth-user"],
+    queryFn: async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      return data?.user;
+    },
+    enabled: isAuthenticated,
+    subscribed: isFocused,
+  });
+  const userId = userData?.id;
 
   const {
     data: profileData,
@@ -54,7 +53,6 @@ export default function ProfileScreen() {
     subscribed: isFocused,
   });
 
-  // Fetch user's foods for 'My Recipes'
   const {
     data: foodsData,
     isLoading: isFoodsLoading,
@@ -69,7 +67,23 @@ export default function ProfileScreen() {
     subscribed: isFocused && activeTab === "My Recipes",
   });
 
-  // Remove static foodItems, use foodsData for My Recipes
+  if (isUserLoading) {
+    return (
+      <SafeAreaView className="flex-1 justify-center items-center bg-white">
+        <ActivityIndicator size="large" color="#bb0718" />
+      </SafeAreaView>
+    );
+  }
+
+  if (userError) {
+    return (
+      <SafeAreaView className="flex-1 justify-center items-center bg-white px-4">
+        <Text className="text-red-600 font-bold text-center">
+          {userError.message || "Failed to load user data."}
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
