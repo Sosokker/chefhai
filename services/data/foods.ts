@@ -57,3 +57,97 @@ export const getFoods = async (
   const { data, error } = await query;
   return { data, error };
 };
+
+interface SavedFood {
+  user_id: string;
+  food_id: string;
+  created_at: string;
+}
+
+interface LikedFood {
+  user_id: string;
+  food_id: string;
+  created_at: string;
+}
+
+/**
+ * Retrieves a list of saved foods for a specific user.
+ * 
+ * @param userId - The ID of the user to retrieve saved foods for.
+ */
+export const getSavedFoods = async (userId: string): Promise<{ data: SavedFood[] | null; error: PostgrestError | null }> => {
+  const { data, error } = await supabase.from("food_saves")
+  .select(`
+      user_id,
+      food_id,
+      created_at
+      `)
+  .eq("user_id", userId)
+  return { data, error };
+}
+
+/**
+ * Retrieves a list of liked foods for a specific user.
+ * 
+ * @param userId - The ID of the user to retrieve liked foods for.
+ */
+export const getLikedFoods = async (userId: string): Promise<{ data: LikedFood[] | null; error: PostgrestError | null }> => {
+  const { data, error } = await supabase.from("food_likes")
+  .select(`
+      user_id,
+      food_id,
+      created_at
+      `)
+  .eq("user_id", userId)
+  return { data, error };
+}
+
+interface Nutrient {
+  food_id: string,
+  fat_g: number,
+  fiber_g: number,
+  protein_g: number,
+  carbs_g: number,
+  created_at: string,
+}
+
+export const getNutrients = async (food_id: string): Promise<{ data: Nutrient | null; error: PostgrestError | null }> => {
+  const { data, error } = await supabase.from("nutrients")
+  .select(`
+      food_id,
+      fat_g,
+      fiber_g,
+      protein_g,
+      carbs_g,
+      created_at
+      `)
+  .eq("food_id", food_id)
+  .single()
+  return { data, error };
+}
+
+interface Ingredient {
+  id: string;
+  food_id: string;
+  name: string;
+  emoji: string;
+  created_at: string;
+}
+
+/**
+* Retrieves a list of ingredients for a specific food.
+* 
+* @param foodId - The ID of the food to retrieve ingredients for.
+*/
+export const getIngredients = async (foodId: string): Promise<{ data: Ingredient[] | null; error: PostgrestError | null }> => {
+  const { data, error } = await supabase.from("ingredients")
+  .select(`
+      id,
+      food_id,
+      name,
+      emoji,
+      created_at
+      `)
+  .eq("food_id", foodId)
+  return { data, error };
+}; 
