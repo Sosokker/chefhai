@@ -28,15 +28,27 @@ export async function getProfile(userId: string): Promise<{
 }
 
 /**
- * Updates the username of a user in the `profiles` table.
+ * Updates the username (and optionally avatar_url) of a user in the `profiles` table.
  */
-export async function updateProfile(userId: string, username: string): Promise<{ data: any; error: PostgrestError | null }> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ username: username })
-      .eq('id', userId)
-      .select()
-      .single()
-  
-    return { data, error }
+export async function updateProfile(
+  userId: string,
+  username?: string | null,
+  avatar_url?: string | null
+): Promise<{ data: any; error: PostgrestError | null }> {
+  const updateData: Record<string, string | null> = {}
+  if (username !== undefined && username !== null) {
+    updateData.username = username
+  }
+  if (avatar_url !== undefined && avatar_url !== null) {
+    updateData.avatar_url = avatar_url
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(updateData)
+    .eq('id', userId)
+    .select()
+    .single()
+
+  return { data, error }
 }

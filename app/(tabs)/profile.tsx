@@ -1,27 +1,32 @@
 "use client";
 
+import { useAuth } from "@/context/auth-context";
+import { getFoods } from "@/services/data/foods";
+import { getProfile, updateProfile } from "@/services/data/profile";
+import { supabase } from "@/services/supabase";
+import { useIsFocused } from "@react-navigation/native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import { useAuth } from "@/context/auth-context";
-import { getFoods } from "@/services/data/foods";
-import { getProfile } from "@/services/data/profile";
-import { supabase } from "@/services/supabase";
-import { useIsFocused } from "@react-navigation/native";
-import { useQuery } from "@tanstack/react-query";
+import uuid from "react-native-uuid";
 
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState("My Recipes");
   const { isAuthenticated } = useAuth();
   const isFocused = useIsFocused();
+  const queryClient = useQueryClient();
 
   const {
     data: userData,
@@ -35,7 +40,7 @@ export default function ProfileScreen() {
       return data?.user;
     },
     enabled: isAuthenticated,
-    subscribed: isFocused,
+    staleTime: 0,
   });
   const userId = userData?.id;
 
@@ -50,6 +55,7 @@ export default function ProfileScreen() {
       return getProfile(userId);
     },
     enabled: !!userId,
+    staleTime: 0,
     subscribed: isFocused,
   });
 
@@ -64,8 +70,79 @@ export default function ProfileScreen() {
       return getFoods(userId);
     },
     enabled: !!userId && activeTab === "My Recipes",
-    subscribed: isFocused && activeTab === "My Recipes",
+    staleTime: 0,
   });
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editUsername, setEditUsername] = useState("");
+  const [editImage, setEditImage] = useState<string | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      setEditError("Permission to access media library is required.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+      allowsEditing: true,
+    });
+
+    if (!result.canceled) {
+      setEditImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadImageToSupabase = async (uri: string): Promise<string> => {
+    const fileName = `${userId}/${uuid.v4()}.jpg`;
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(fileName, blob, {
+        contentType: "image/jpeg",
+        upsert: true,
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
+    return data.publicUrl;
+  };
+
+  const handleSaveProfile = async () => {
+    setEditLoading(true);
+    setEditError(null);
+
+    try {
+      if (!editUsername.trim()) throw new Error("Username cannot be empty");
+
+      let avatarUrl = profileData?.data?.avatar_url ?? null;
+
+      if (editImage && editImage !== avatarUrl) {
+        avatarUrl = await uploadImageToSupabase(editImage);
+      }
+
+      const { error: updateError } = await updateProfile(
+        userId!,
+        editUsername.trim(),
+        avatarUrl
+      );
+      if (updateError) throw updateError;
+
+      setModalVisible(false);
+      await queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+    } catch (err: any) {
+      setEditError(err.message || "Failed to update profile");
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   if (isUserLoading) {
     return (
@@ -88,21 +165,21 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScrollView className="flex-1">
-        {/* Profile Header */}
         <View className="items-center py-6">
-          <View className="w-[100px] h-[100px] rounded-full border border-gray-300 justify-center items-center mb-3">
-            <View className="w-[96px] h-[96px] rounded-full bg-gray-100 justify-center items-center">
-              <Text className="text-5xl">👨‍🍳</Text>
-            </View>
+          <View className="w-[100px] h-[100px] rounded-full border border-gray-300 justify-center items-center mb-3 overflow-hidden">
+            <Image
+              source={
+                profileData?.data?.avatar_url
+                  ? { uri: profileData.data.avatar_url }
+                  : require("@/assets/images/placeholder-food.jpg")
+              }
+              className="w-[96px] h-[96px] rounded-full"
+            />
           </View>
           {isLoading ? (
-            <ActivityIndicator
-              size="small"
-              color="#bb0718"
-              style={{ marginBottom: 12 }}
-            />
+            <ActivityIndicator size="small" color="#bb0718" />
           ) : error ? (
-            <Text className="text-xl font-bold mb-3 text-red-600">
+            <Text className="text-red-600 font-bold mb-3">
               {error.message || error.toString()}
             </Text>
           ) : (
@@ -110,9 +187,79 @@ export default function ProfileScreen() {
               {profileData?.data?.username ?? "-"}
             </Text>
           )}
-          <TouchableOpacity className="bg-red-600 py-2 px-10 rounded-lg">
+          <TouchableOpacity
+            className="bg-red-600 py-2 px-10 rounded-lg"
+            onPress={() => {
+              setEditUsername(profileData?.data?.username ?? "");
+              setEditImage(profileData?.data?.avatar_url ?? null);
+              setEditError(null);
+              setModalVisible(true);
+            }}
+          >
             <Text className="text-white font-bold">Edit</Text>
           </TouchableOpacity>
+
+          {/* Edit Modal */}
+          <Modal
+            visible={modalVisible}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View className="flex-1 justify-center items-center bg-black bg-opacity-40">
+              <View className="bg-white rounded-xl p-6 w-11/12 max-w-md shadow-lg">
+                <Text className="text-lg font-bold mb-4 text-center">
+                  Edit Profile
+                </Text>
+
+                <Pressable className="items-center mb-4" onPress={pickImage}>
+                  <Image
+                    source={
+                      editImage
+                        ? { uri: editImage }
+                        : require("@/assets/images/placeholder-food.jpg")
+                    }
+                    className="w-24 h-24 rounded-full mb-2 bg-gray-200"
+                  />
+                  <Text className="text-blue-600 underline">Change Photo</Text>
+                </Pressable>
+
+                <Text className="mb-1 font-medium">Username</Text>
+                <TextInput
+                  className="border border-gray-300 rounded px-3 py-2 mb-4"
+                  value={editUsername}
+                  onChangeText={setEditUsername}
+                  placeholder="Enter new username"
+                />
+                {editError && (
+                  <Text className="text-red-600 mb-2 text-center">
+                    {editError}
+                  </Text>
+                )}
+
+                <View className="flex-row justify-between mt-2">
+                  <TouchableOpacity
+                    className="bg-gray-300 py-2 px-6 rounded-lg"
+                    onPress={() => setModalVisible(false)}
+                    disabled={editLoading}
+                  >
+                    <Text className="text-gray-700 font-bold">Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="bg-red-600 py-2 px-6 rounded-lg"
+                    onPress={handleSaveProfile}
+                    disabled={editLoading}
+                  >
+                    {editLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text className="text-white font-bold">Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
 
         {/* Tab Navigation */}
@@ -132,7 +279,7 @@ export default function ProfileScreen() {
 
         <View className="h-px bg-[#EEEEEE] mx-4" />
 
-        {/* Food Grid / Tab Content */}
+        {/* Recipes */}
         {activeTab === "My Recipes" && (
           <View className="flex-row flex-wrap p-2">
             {isFoodsLoading ? (
@@ -146,7 +293,7 @@ export default function ProfileScreen() {
                 {foodsError.message || foodsError.toString()}
               </Text>
             ) : foodsData?.data?.length ? (
-              foodsData.data.map((item, index) => (
+              foodsData.data.map((item) => (
                 <View key={item.id} className="w-1/2 p-2 relative">
                   <Image
                     source={
@@ -169,16 +316,6 @@ export default function ProfileScreen() {
               </Text>
             )}
           </View>
-        )}
-        {activeTab === "Likes" && (
-          <Text className="text-gray-400 font-bold p-4">
-            Liked recipes will appear here.
-          </Text>
-        )}
-        {activeTab === "Saved" && (
-          <Text className="text-gray-400 font-bold p-4">
-            Saved recipes will appear here.
-          </Text>
         )}
       </ScrollView>
     </SafeAreaView>
