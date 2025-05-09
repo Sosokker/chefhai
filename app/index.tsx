@@ -1,4 +1,5 @@
 import { useAuth } from "@/context/auth-context";
+import "@/global.css";
 import { Redirect } from "expo-router";
 import React from "react";
 import { ActivityIndicator, View } from "react-native";

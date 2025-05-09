@@ -36,7 +36,9 @@ export default function SignupScreen() {
 
     try {
       setIsLoading(true);
-      await signup(name, email, password);
+      // Only pass email and password to signup, as per new auth-context
+      await signup(email, password);
+      // Optionally, save name to profile after signup here in the future
     } catch (error) {
       Alert.alert("Error", "Failed to sign up. Please try again.");
     } finally {
