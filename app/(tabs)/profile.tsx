@@ -1,9 +1,9 @@
 "use client";
 
-import { Image } from "expo-image";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -12,98 +12,64 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
+import { getFoods } from "@/services/data/foods";
 import { getProfile } from "@/services/data/profile";
 import { supabase } from "@/services/supabase";
+import { useIsFocused } from "@react-navigation/native";
+import { useQuery } from "@tanstack/react-query";
 
 export default function ProfileScreen() {
-  const [activeTab, setActiveTab] = useState("Repost");
-  const [username, setUsername] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("My Recipes");
   const { isAuthenticated } = useAuth();
+  const isFocused = useIsFocused();
+
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data: userData, error: userError } =
-          await supabase.auth.getUser();
-        if (userError || !userData?.user?.id) {
-          setError("Unable to get user info.");
-          setUsername(null);
-          setLoading(false);
-          return;
-        }
-        const { data, error } = await getProfile(userData.user.id);
-        if (error) {
-          setError(error.message || "Failed to fetch profile");
-          setUsername(null);
-        } else {
-          setUsername(data?.username || null);
-        }
-      } catch (e: any) {
-        setError(e.message || "Unknown error");
-        setUsername(null);
-      } finally {
-        setLoading(false);
+    let ignore = false;
+    async function getUser() {
+      const { data } = await supabase.auth.getUser();
+      if (!ignore) {
+        setUserId(data?.user?.id ?? null);
       }
-    };
-    if (isAuthenticated) {
-      fetchProfile();
     }
+    if (isAuthenticated) getUser();
+    else setUserId(null);
+    return () => {
+      ignore = true;
+    };
   }, [isAuthenticated]);
 
-  const foodItems = [
-    {
-      id: 1,
-      name: "Padthaipro",
-      image: require("@/assets/images/food/padthai.jpg"),
-      color: "#FFCC00",
+  const {
+    data: profileData,
+    error,
+    isLoading,
+  } = useQuery({
+    queryKey: ["profile", userId],
+    queryFn: async () => {
+      if (!userId) throw new Error("No user id");
+      return getProfile(userId);
     },
-    {
-      id: 2,
-      name: "Jjajangmyeon",
-      image: require("@/assets/images/food/jjajangmyeon.jpg"),
-      color: "#FFA500",
+    enabled: !!userId,
+    subscribed: isFocused,
+  });
+
+  // Fetch user's foods for 'My Recipes'
+  const {
+    data: foodsData,
+    isLoading: isFoodsLoading,
+    error: foodsError,
+  } = useQuery({
+    queryKey: ["my-recipes", userId],
+    queryFn: async () => {
+      if (!userId) throw new Error("No user id");
+      return getFoods(userId);
     },
-    {
-      id: 3,
-      name: "Wingztab",
-      image: require("@/assets/images/food/wings.jpg"),
-      color: "#FFCC00",
-    },
-    {
-      id: 4,
-      name: "Ramen",
-      image: require("@/assets/images/food/ramen.jpg"),
-      color: "#FFA500",
-    },
-    {
-      id: 5,
-      name: "Tiramisu",
-      image: require("@/assets/images/food/tiramisu.jpg"),
-      color: "#FFCC00",
-    },
-    {
-      id: 6,
-      name: "Beef wellington",
-      image: require("@/assets/images/food/beef.jpg"),
-      color: "#FFA500",
-    },
-    {
-      id: 7,
-      name: "Tiramisu",
-      image: require("@/assets/images/food/tiramisu.jpg"),
-      color: "#FFCC00",
-    },
-    {
-      id: 8,
-      name: "Beef wellington",
-      image: require("@/assets/images/food/beef.jpg"),
-      color: "#FFA500",
-    },
-  ];
+    enabled: !!userId && activeTab === "My Recipes",
+    subscribed: isFocused && activeTab === "My Recipes",
+  });
+
+  // Remove static foodItems, use foodsData for My Recipes
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
@@ -115,16 +81,20 @@ export default function ProfileScreen() {
               <Text className="text-5xl">👨‍🍳</Text>
             </View>
           </View>
-          {loading ? (
+          {isLoading ? (
             <ActivityIndicator
               size="small"
               color="#bb0718"
               style={{ marginBottom: 12 }}
             />
           ) : error ? (
-            <Text className="text-xl font-bold mb-3 text-red-600">{error}</Text>
+            <Text className="text-xl font-bold mb-3 text-red-600">
+              {error.message || error.toString()}
+            </Text>
           ) : (
-            <Text className="text-xl font-bold mb-3">{username ?? "-"}</Text>
+            <Text className="text-xl font-bold mb-3">
+              {profileData?.data?.username ?? "-"}
+            </Text>
           )}
           <TouchableOpacity className="bg-red-600 py-2 px-10 rounded-lg">
             <Text className="text-white font-bold">Edit</Text>
@@ -133,7 +103,7 @@ export default function ProfileScreen() {
 
         {/* Tab Navigation */}
         <View className="flex-row justify-around py-3">
-          {["Repost", "Likes", "Bookmark"].map((tab) => (
+          {["My Recipes", "Likes", "Saved"].map((tab) => (
             <TouchableOpacity
               key={tab}
               className={`py-2 px-4 ${
@@ -148,26 +118,54 @@ export default function ProfileScreen() {
 
         <View className="h-px bg-[#EEEEEE] mx-4" />
 
-        {/* Food Grid */}
-        <View className="flex-row flex-wrap p-2">
-          {foodItems.map((item, index) => (
-            <View key={`${item.id}-${index}`} className="w-1/2 p-2 relative">
-              <Image
-                source={item.image}
-                className="w-full h-[120px] rounded-lg"
-                resizeMode="cover"
+        {/* Food Grid / Tab Content */}
+        {activeTab === "My Recipes" && (
+          <View className="flex-row flex-wrap p-2">
+            {isFoodsLoading ? (
+              <ActivityIndicator
+                size="small"
+                color="#bb0718"
+                style={{ marginTop: 20 }}
               />
-              <View
-                className="absolute bottom-4 left-4 py-1 px-2 rounded bg-opacity-90"
-                style={{ backgroundColor: item.color }}
-              >
-                <Text className="text-[#333] font-bold text-xs">
-                  {item.name}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
+            ) : foodsError ? (
+              <Text className="text-red-600 font-bold p-4">
+                {foodsError.message || foodsError.toString()}
+              </Text>
+            ) : foodsData?.data?.length ? (
+              foodsData.data.map((item, index) => (
+                <View key={item.id} className="w-1/2 p-2 relative">
+                  <Image
+                    source={
+                      item.image_url
+                        ? { uri: item.image_url }
+                        : require("@/assets/images/placeholder-food.jpg")
+                    }
+                    className="w-full h-[120px] rounded-lg"
+                  />
+                  <View className="absolute bottom-4 left-4 py-1 px-2 rounded bg-opacity-90 bg-white/80">
+                    <Text className="text-[#333] font-bold text-xs">
+                      {item.name}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text className="text-gray-400 font-bold p-4">
+                No recipes found.
+              </Text>
+            )}
+          </View>
+        )}
+        {activeTab === "Likes" && (
+          <Text className="text-gray-400 font-bold p-4">
+            Liked recipes will appear here.
+          </Text>
+        )}
+        {activeTab === "Saved" && (
+          <Text className="text-gray-400 font-bold p-4">
+            Saved recipes will appear here.
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
