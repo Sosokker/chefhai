@@ -208,48 +208,54 @@ export const checkUserSaved = async (food_id: string, user_id: string) => {
 export const getComments = async (food_id: string) => {
     console.log('Getting comments for food_id:', food_id);
     
-    const { data, error } = await supabase
-        .from("food_comments")
-        .select(`
-            id,
-            created_at,
-            user_id,
-            food_id,
-            content
-        `)
-        .eq("food_id", food_id)
-        .order("created_at", { ascending: false });
-    
-    if (error) {
-        console.error('Error getting comments:', error);
+    try {
+        const { data, error } = await supabase
+            .from("food_comments")
+            .select(`
+                id,
+                created_at,
+                user_id,
+                food_id,
+                content
+            `)
+            .eq("food_id", food_id)
+            .order("created_at", { ascending: false });
+        
+        if (error) {
+            console.error('Error getting comments:', error);
+            return { data: [], error };
+        }
+        
+        if (data && data.length > 0) {
+            // Get unique user IDs from comments
+            const userIds = [...new Set(data.map(comment => comment.user_id))];
+            
+            // Fetch profiles for these users
+            const { data: profiles } = await getProfiles(userIds);
+            
+            // Add user profiles to comments
+            if (profiles && profiles.length > 0) {
+                const profileMap = profiles.reduce((acc, profile) => {
+                    acc[profile.id] = profile;
+                    return acc;
+                }, {} as Record<string, any>);
+                
+                // Attach profiles to comments
+                const commentsWithProfiles = data.map(comment => ({
+                    ...comment,
+                    user: profileMap[comment.user_id] || null
+                }));
+                
+                console.log(`Found ${commentsWithProfiles.length} comments for food_id: ${food_id}`);
+                return { data: commentsWithProfiles, error: null };
+            }
+        }
+        
+        // If no profiles were found or no comments exist, return the original data
+        console.log(`Found ${data?.length || 0} comments for food_id: ${food_id}`);
+        return { data: data?.map(comment => ({ ...comment, user: null })) || [], error: null };
+    } catch (error) {
+        console.error('Error in getComments:', error);
         return { data: [], error };
     }
-    
-    if (data && data.length > 0) {
-        // Get unique user IDs from comments
-        const userIds = [...new Set(data.map(comment => comment.user_id))];
-        
-        // Fetch profiles for these users
-        const { data: profiles } = await getProfiles(userIds);
-        
-        // Add user profiles to comments
-        if (profiles) {
-            const profileMap = profiles.reduce((acc, profile) => {
-                acc[profile.id] = profile;
-                return acc;
-            }, {} as Record<string, any>);
-            
-            // Attach profiles to comments
-            const commentsWithProfiles = data.map(comment => ({
-                ...comment,
-                user: profileMap[comment.user_id]
-            }));
-            
-            console.log(`Found ${commentsWithProfiles.length} comments for food_id: ${food_id}`);
-            return { data: commentsWithProfiles, error };
-        }
-    }
-    
-    console.log(`Found ${data?.length || 0} comments for food_id: ${food_id}`);
-    return { data, error };
-}
+};
