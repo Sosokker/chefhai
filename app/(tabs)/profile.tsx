@@ -1,13 +1,15 @@
-"use client";
+"use client"
 
-import { useAuth } from "@/context/auth-context";
-import { getFoods } from "@/services/data/foods";
-import { getProfile, updateProfile } from "@/services/data/profile";
-import { supabase } from "@/services/supabase";
-import { useIsFocused } from "@react-navigation/native";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
+import { useAuth } from "@/context/auth-context"
+import { getFoods } from "@/services/data/foods"
+import { getBookmarkedPosts } from "@/services/data/bookmarks"
+import { getLikedPosts } from "@/services/data/likes"
+import { getProfile, updateProfile } from "@/services/data/profile"
+import { supabase } from "@/services/supabase"
+import { useIsFocused, useNavigation } from "@react-navigation/native"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import * as ImagePicker from "expo-image-picker"
+import { useEffect, useState } from "react"
 import {
   ActivityIndicator,
   Image,
@@ -18,15 +20,31 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import uuid from "react-native-uuid";
+} from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import uuid from "react-native-uuid"
+
+// Define the Food type based on your database structure
+type Food = {
+  id: number
+  name: string
+  description: string
+  time_to_cook_minutes: number
+  skill_level: string
+  ingredient_count: number
+  calories: number
+  image_url: string
+  is_shared: boolean
+  created_by: string
+  created_at: string
+}
 
 export default function ProfileScreen() {
-  const [activeTab, setActiveTab] = useState("My Recipes");
-  const { isAuthenticated } = useAuth();
-  const isFocused = useIsFocused();
-  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("My Recipes")
+  const { isAuthenticated } = useAuth()
+  const isFocused = useIsFocused()
+  const queryClient = useQueryClient()
+  const navigation = useNavigation()
 
   const {
     data: userData,
@@ -35,14 +53,14 @@ export default function ProfileScreen() {
   } = useQuery({
     queryKey: ["auth-user"],
     queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      return data?.user;
+      const { data, error } = await supabase.auth.getUser()
+      if (error) throw error
+      return data?.user
     },
     enabled: isAuthenticated,
     staleTime: 0,
-  });
-  const userId = userData?.id;
+  })
+  const userId = userData?.id
 
   const {
     data: profileData,
@@ -51,115 +69,186 @@ export default function ProfileScreen() {
   } = useQuery({
     queryKey: ["profile", userId],
     queryFn: async () => {
-      if (!userId) throw new Error("No user id");
-      return getProfile(userId);
+      if (!userId) throw new Error("No user id")
+      return getProfile(userId)
     },
     enabled: !!userId,
     staleTime: 0,
     subscribed: isFocused,
-  });
+  })
 
+  // My Recipes Query
   const {
-    data: foodsData,
-    isLoading: isFoodsLoading,
-    error: foodsError,
+    data: myRecipesData,
+    isLoading: isMyRecipesLoading,
+    error: myRecipesError,
+    refetch: refetchMyRecipes,
   } = useQuery({
     queryKey: ["my-recipes", userId],
     queryFn: async () => {
-      if (!userId) throw new Error("No user id");
-      return getFoods(userId);
+      if (!userId) throw new Error("No user id")
+      return getFoods(userId)
     },
-    enabled: !!userId && activeTab === "My Recipes",
-    staleTime: 0,
-  });
+    enabled: !!userId,
+    staleTime: 1000 * 60, // 1 minute
+  })
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editUsername, setEditUsername] = useState("");
-  const [editImage, setEditImage] = useState<string | null>(null);
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+  // Likes Query
+  const {
+    data: likesData,
+    isLoading: isLikesLoading,
+    error: likesError,
+    refetch: refetchLikes,
+  } = useQuery({
+    queryKey: ["liked-posts", userId],
+    queryFn: async () => {
+      if (!userId) throw new Error("No user id")
+      return getLikedPosts(userId)
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60, // 1 minute
+  })
+
+  // Bookmarks Query
+  const {
+    data: bookmarksData,
+    isLoading: isBookmarksLoading,
+    error: bookmarksError,
+    refetch: refetchBookmarks,
+  } = useQuery({
+    queryKey: ["bookmarked-posts", userId],
+    queryFn: async () => {
+      if (!userId) throw new Error("No user id")
+      return getBookmarkedPosts(userId)
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60, // 1 minute
+  })
+
+  // Navigate to post detail
+  const handleFoodPress = (foodId: number) => {
+    // @ts-ignore - Navigation typing might be different in your app
+    navigation.navigate("post-detail", { id: foodId })
+  }
+
+  // Refetch data when tab changes
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+
+    // Refetch data for the selected tab
+    if (tab === "My Recipes") {
+      refetchMyRecipes()
+    } else if (tab === "Likes") {
+      refetchLikes()
+    } else if (tab === "Bookmark") {
+      refetchBookmarks()
+    }
+  }
+
+  // Refetch all data when the screen comes into focus
+  useEffect(() => {
+    if (isFocused && userId) {
+      refetchMyRecipes()
+      refetchLikes()
+      refetchBookmarks()
+    }
+  }, [isFocused, userId])
+
+  const [modalVisible, setModalVisible] = useState(false)
+  const [editUsername, setEditUsername] = useState("")
+  const [editImage, setEditImage] = useState<string | null>(null)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (status !== "granted") {
-      setEditError("Permission to access media library is required.");
-      return;
+      setEditError("Permission to access media library is required.")
+      return
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.7,
       allowsEditing: true,
-    });
+    })
 
     if (!result.canceled) {
-      setEditImage(result.assets[0].uri);
+      setEditImage(result.assets[0].uri)
     }
-  };
+  }
 
   const uploadImageToSupabase = async (uri: string): Promise<string> => {
-    const fileName = `${userId}/${uuid.v4()}.jpg`;
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    const fileName = `${userId}/${uuid.v4()}.jpg`
+    const response = await fetch(uri)
+    const blob = await response.blob()
 
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(fileName, blob, {
-        contentType: "image/jpeg",
-        upsert: true,
-      });
+    const { error: uploadError } = await supabase.storage.from("avatars").upload(fileName, blob, {
+      contentType: "image/jpeg",
+      upsert: true,
+    })
 
-    if (uploadError) throw uploadError;
+    if (uploadError) throw uploadError
 
-    const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
-    return data.publicUrl;
-  };
+    const { data } = supabase.storage.from("avatars").getPublicUrl(fileName)
+    return data.publicUrl
+  }
 
   const handleSaveProfile = async () => {
-    setEditLoading(true);
-    setEditError(null);
+    setEditLoading(true)
+    setEditError(null)
 
     try {
-      if (!editUsername.trim()) throw new Error("Username cannot be empty");
+      if (!editUsername.trim()) throw new Error("Username cannot be empty")
 
-      let avatarUrl = profileData?.data?.avatar_url ?? null;
+      let avatarUrl = profileData?.data?.avatar_url ?? null
 
       if (editImage && editImage !== avatarUrl) {
-        avatarUrl = await uploadImageToSupabase(editImage);
+        avatarUrl = await uploadImageToSupabase(editImage)
       }
 
-      const { error: updateError } = await updateProfile(
-        userId!,
-        editUsername.trim(),
-        avatarUrl
-      );
-      if (updateError) throw updateError;
+      const { error: updateError } = await updateProfile(userId!, editUsername.trim(), avatarUrl)
+      if (updateError) throw updateError
 
-      setModalVisible(false);
-      await queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      setModalVisible(false)
+      await queryClient.invalidateQueries({ queryKey: ["profile", userId] })
     } catch (err: any) {
-      setEditError(err.message || "Failed to update profile");
+      setEditError(err.message || "Failed to update profile")
     } finally {
-      setEditLoading(false);
+      setEditLoading(false)
     }
-  };
+  }
+
+  // Get the active data based on the current tab
+  const getActiveData = () => {
+    switch (activeTab) {
+      case "My Recipes":
+        return { data: myRecipesData, isLoading: isMyRecipesLoading, error: myRecipesError }
+      case "Likes":
+        return { data: likesData, isLoading: isLikesLoading, error: likesError }
+      case "Bookmark":
+        return { data: bookmarksData, isLoading: isBookmarksLoading, error: bookmarksError }
+      default:
+        return { data: myRecipesData, isLoading: isMyRecipesLoading, error: myRecipesError }
+    }
+  }
+
+  const { data: activeData, isLoading: isActiveLoading, error: activeError } = getActiveData()
 
   if (isUserLoading) {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator size="large" color="#bb0718" />
       </SafeAreaView>
-    );
+    )
   }
 
   if (userError) {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-white px-4">
-        <Text className="text-red-600 font-bold text-center">
-          {userError.message || "Failed to load user data."}
-        </Text>
+        <Text className="text-red-600 font-bold text-center">{userError.message || "Failed to load user data."}</Text>
       </SafeAreaView>
-    );
+    )
   }
 
   return (
@@ -179,46 +268,31 @@ export default function ProfileScreen() {
           {isLoading ? (
             <ActivityIndicator size="small" color="#bb0718" />
           ) : error ? (
-            <Text className="text-red-600 font-bold mb-3">
-              {error.message || error.toString()}
-            </Text>
+            <Text className="text-red-600 font-bold mb-3">{error.message || error.toString()}</Text>
           ) : (
-            <Text className="text-xl font-bold mb-3">
-              {profileData?.data?.username ?? "-"}
-            </Text>
+            <Text className="text-xl font-bold mb-3">{profileData?.data?.username ?? "-"}</Text>
           )}
           <TouchableOpacity
             className="bg-red-600 py-2 px-10 rounded-lg"
             onPress={() => {
-              setEditUsername(profileData?.data?.username ?? "");
-              setEditImage(profileData?.data?.avatar_url ?? null);
-              setEditError(null);
-              setModalVisible(true);
+              setEditUsername(profileData?.data?.username ?? "")
+              setEditImage(profileData?.data?.avatar_url ?? null)
+              setEditError(null)
+              setModalVisible(true)
             }}
           >
             <Text className="text-white font-bold">Edit</Text>
           </TouchableOpacity>
 
           {/* Edit Modal */}
-          <Modal
-            visible={modalVisible}
-            animationType="slide"
-            transparent
-            onRequestClose={() => setModalVisible(false)}
-          >
+          <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
             <View className="flex-1 justify-center items-center bg-black bg-opacity-40">
               <View className="bg-white rounded-xl p-6 w-11/12 max-w-md shadow-lg">
-                <Text className="text-lg font-bold mb-4 text-center">
-                  Edit Profile
-                </Text>
+                <Text className="text-lg font-bold mb-4 text-center">Edit Profile</Text>
 
                 <Pressable className="items-center mb-4" onPress={pickImage}>
                   <Image
-                    source={
-                      editImage
-                        ? { uri: editImage }
-                        : require("@/assets/images/placeholder-food.jpg")
-                    }
+                    source={editImage ? { uri: editImage } : require("@/assets/images/placeholder-food.jpg")}
                     className="w-24 h-24 rounded-full mb-2 bg-gray-200"
                   />
                   <Text className="text-blue-600 underline">Change Photo</Text>
@@ -231,11 +305,7 @@ export default function ProfileScreen() {
                   onChangeText={setEditUsername}
                   placeholder="Enter new username"
                 />
-                {editError && (
-                  <Text className="text-red-600 mb-2 text-center">
-                    {editError}
-                  </Text>
-                )}
+                {editError && <Text className="text-red-600 mb-2 text-center">{editError}</Text>}
 
                 <View className="flex-row justify-between mt-2">
                   <TouchableOpacity
@@ -263,61 +333,52 @@ export default function ProfileScreen() {
         </View>
 
         {/* Tab Navigation */}
-        <View className="flex-row justify-around py-3">
-          {["My Recipes", "Likes", "Saved"].map((tab) => (
+        <View className="flex-row justify-around py-3 border-b border-gray-200">
+          {["My Recipes", "Likes", "Bookmark"].map((tab) => (
             <TouchableOpacity
               key={tab}
-              className={`py-2 px-4 ${
-                activeTab === tab ? "border-b-2 border-[#333]" : ""
-              }`}
-              onPress={() => setActiveTab(tab)}
+              className={`py-2 px-4 ${activeTab === tab ? "border-b-2 border-[#333]" : ""}`}
+              onPress={() => handleTabChange(tab)}
             >
-              <Text className="font-medium">{tab}</Text>
+              <Text className={`font-medium ${activeTab === tab ? "font-bold" : ""}`}>{tab}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View className="h-px bg-[#EEEEEE] mx-4" />
-
-        {/* Recipes */}
-        {activeTab === "My Recipes" && (
+        {/* Tab Content */}
+        {isActiveLoading ? (
+          <View className="flex-1 items-center justify-center py-8">
+            <ActivityIndicator size="small" color="#bb0718" />
+          </View>
+        ) : activeError ? (
+          <View className="flex-1 items-center justify-center py-8">
+            <Text className="text-red-600 font-bold text-center">{activeError.message || "Failed to load data"}</Text>
+          </View>
+        ) : !activeData?.data?.length ? (
+          <View className="flex-1 items-center justify-center py-8">
+            <Text className="text-gray-400 font-medium text-center">No items found</Text>
+          </View>
+        ) : (
           <View className="flex-row flex-wrap p-2">
-            {isFoodsLoading ? (
-              <ActivityIndicator
-                size="small"
-                color="#bb0718"
-                style={{ marginTop: 20 }}
-              />
-            ) : foodsError ? (
-              <Text className="text-red-600 font-bold p-4">
-                {foodsError.message || foodsError.toString()}
-              </Text>
-            ) : foodsData?.data?.length ? (
-              foodsData.data.map((item) => (
-                <View key={item.id} className="w-1/2 p-2 relative">
-                  <Image
-                    source={
-                      item.image_url
-                        ? { uri: item.image_url }
-                        : require("@/assets/images/placeholder-food.jpg")
-                    }
-                    className="w-full h-[120px] rounded-lg"
-                  />
-                  <View className="absolute bottom-4 left-4 py-1 px-2 rounded bg-opacity-90 bg-white/80">
-                    <Text className="text-[#333] font-bold text-xs">
-                      {item.name}
-                    </Text>
-                  </View>
+            {activeData.data.map((item: Food) => (
+              <TouchableOpacity
+                key={item.id}
+                className="w-1/2 p-2 relative"
+                onPress={() => handleFoodPress(item.id)}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={item.image_url ? { uri: item.image_url } : require("@/assets/images/placeholder-food.jpg")}
+                  className="w-full h-[120px] rounded-lg"
+                />
+                <View className="absolute bottom-4 left-4 py-1 px-2 rounded bg-opacity-90 bg-white/80">
+                  <Text className="text-[#333] font-bold text-xs">{item.name}</Text>
                 </View>
-              ))
-            ) : (
-              <Text className="text-gray-400 font-bold p-4">
-                No recipes found.
-              </Text>
-            )}
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
-  );
+  )
 }
