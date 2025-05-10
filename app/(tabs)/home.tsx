@@ -61,43 +61,47 @@ const navigateToFoodDetail = (foodId: string) => {
   router.push({ pathname: "/recipe-detail", params: { id: foodId } });
 };
 
-const handleImageSelection = async (
-  pickerFn:
-    | typeof ImagePicker.launchCameraAsync
-    | typeof ImagePicker.launchImageLibraryAsync
-) => {
-  const result = await pickerFn({
-    mediaTypes: ["images"],
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 1,
-  });
-
-  if (!result.canceled) {
-    try {
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data?.user?.id) throw new Error("Cannot get user id");
-      const userId = data.user.id;
-      await processImage(result.assets[0], userId);
-    } catch (err) {
-      Alert.alert(
-        "Image Processing Failed",
-        (err as Error).message || "Unknown error"
-      );
-    }
-    router.push({
-      pathname: "/recipe-detail",
-      params: {
-        title: "My New Recipe",
-        image: result.assets[0].uri,
-      },
-    });
-  }
-};
-
 export default function HomeScreen() {
+  const [imageProcessing, setImageProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { data: foodsData = [], isLoading, error } = useFoodsQuery();
+
+  const handleImageSelection = async (
+    pickerFn:
+      | typeof ImagePicker.launchCameraAsync
+      | typeof ImagePicker.launchImageLibraryAsync
+  ) => {
+    const result = await pickerFn({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImageProcessing(true);
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data?.user?.id) throw new Error("Cannot get user id");
+        const userId = data.user.id;
+        await processImage(result.assets[0], userId);
+      } catch (err) {
+        Alert.alert(
+          "Image Processing Failed",
+          (err as Error).message || "Unknown error"
+        );
+      } finally {
+        setImageProcessing(false);
+      }
+      router.push({
+        pathname: "/recipe-detail",
+        params: {
+          title: "My New Recipe",
+          image: result.assets[0].uri,
+        },
+      });
+    }
+  };
 
   const filteredFoods = useMemo(() => {
     return searchQuery
@@ -110,6 +114,45 @@ export default function HomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" />
+      {imageProcessing && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(255,255,255,0.7)",
+            zIndex: 9999,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              padding: 24,
+              borderRadius: 16,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{ fontSize: 18, fontWeight: "bold", marginBottom: 12 }}
+            >
+              Processing image...
+            </Text>
+            <View style={{ marginBottom: 8 }}>
+              <FontAwesome
+                name="spinner"
+                size={36}
+                color="#ffd60a"
+                style={{}}
+              />
+            </View>
+            <Text style={{ color: "#888" }}>Please wait</Text>
+          </View>
+        </View>
+      )}
 
       <View className="flex-row justify-between items-center px-6 pt-4 pb-2">
         <Text className="text-3xl font-bold">Hi! Mr. Chef</Text>
