@@ -1,5 +1,5 @@
 import { supabase } from "@/services/supabase";
-import { Foods, LikedFood, SavedFood } from "@/types";
+import { Foods, GenAIResult, LikedFood, SavedFood } from "@/types";
 import { PostgrestError } from "@supabase/supabase-js";
 
 /**
@@ -126,3 +126,90 @@ export const getIngredients = async (foodId: string): Promise<{ data: Ingredient
   .eq("food_id", foodId)
   return { data, error };
 }; 
+
+
+/**
+ * Inserts a new food into the database.
+ * 
+ * @param genAIResult - The result from the GenAI API.
+ * @param userId - The ID of the user who created the food.
+ * @param imageUrl - The URL of the image of the food.
+ * @returns A promise that resolves to an object containing the ID of the inserted food and any error that occurred.
+ */
+export const insertGenAIResult = async (
+  genAIResult: GenAIResult,
+  userId: string,
+  imageUrl: string
+): Promise<{ data: string | null; error: PostgrestError | null }> => {
+  const client = supabase;
+
+  const now = new Date().toISOString();
+
+  const { foods, ingredients, nutrients, cooking_steps } = genAIResult;
+
+  const { data: foodInsert, error: foodError } = await client
+    .from("foods")
+    .insert({
+      name: foods.name,
+      description: foods.description,
+      time_to_cook_minutes: foods.time_to_cook_minutes,
+      skill_level: foods.skill_level,
+      ingredient_count: foods.ingredient_count,
+      calories: foods.calories,
+      image_url: imageUrl,
+      is_shared: false,
+      created_by: userId,
+      created_at: now,
+    })
+    .select("id")
+    .single();
+
+  if (foodError || !foodInsert) {
+    return { data: null, error: foodError };
+  }
+
+  const foodId = foodInsert.id;
+
+  const { error: nutrientError } = await client.from("nutrients").insert({
+    food_id: foodId,
+    ...nutrients,
+    created_at: now,
+  });
+
+  if (nutrientError) {
+    return { data: null, error: nutrientError };
+  }
+
+  const ingredientInsert = ingredients.map((i) => ({
+    food_id: foodId,
+    name: i.name,
+    emoji: i.emoji,
+    created_at: now,
+  }));
+
+  const { error: ingredientError } = await client
+    .from("ingredients")
+    .insert(ingredientInsert);
+
+  if (ingredientError) {
+    return { data: null, error: ingredientError };
+  }
+
+  const stepInsert = cooking_steps.map((step) => ({
+    food_id: foodId,
+    step_order: step.step_order,
+    title: step.title,
+    description: step.description,
+    created_at: now,
+  }));
+
+  const { error: stepError } = await client
+    .from("cooking_steps")
+    .insert(stepInsert);
+
+  if (stepError) {
+    return { data: null, error: stepError };
+  }
+
+  return { data: foodId, error: null };
+};

@@ -1,8 +1,14 @@
 import { IconSymbol } from "@/components/ui/IconSymbol";
+import { getFoods, insertGenAIResult } from "@/services/data/foods";
+import { uploadImageToSupabase } from "@/services/data/imageUpload";
+import { callGenAIonImage } from "@/services/gemini";
+import { supabase } from "@/services/supabase";
 import { Feather, FontAwesome, Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
+import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -15,148 +21,96 @@ import {
   View,
 } from "react-native";
 
-// Sample recipe data
-const foodHighlights = [
-  {
-    id: 1,
-    name: "Pad Kra Pao Moo Sab with Eggs",
-    image: require("@/assets/images/food/padkrapao.jpg"),
-    description: "Thai stir-fry with ground pork and holy basil",
-    time: "30 Mins",
-    calories: "520 kcal",
-  },
-  {
-    id: 2,
-    name: "Jjajangmyeon",
-    image: require("@/assets/images/food/jjajangmyeon.jpg"),
-    description: "Korean black bean noodles",
-    time: "45 Mins",
-    calories: "650 kcal",
-  },
-  {
-    id: 3,
-    name: "Ramen",
-    image: require("@/assets/images/food/ramen.jpg"),
-    description: "Japanese noodle soup",
-    time: "60 Mins",
-    calories: "480 kcal",
-  },
-  {
-    id: 4,
-    name: "Beef Wellington",
-    image: require("@/assets/images/food/beef.jpg"),
-    description: "Tender beef wrapped in puff pastry",
-    time: "90 Mins",
-    calories: "750 kcal",
-  },
-];
+const useFoodsQuery = () => {
+  return useQuery({
+    queryKey: ["highlight-foods"],
+    queryFn: async () => {
+      const { data, error } = await getFoods(undefined, true, undefined, 4);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+};
+
+const runImagePipeline = async (
+  imageBase64: string,
+  imageType: string,
+  userId: string
+) => {
+  const imageUri = await uploadImageToSupabase(imageBase64, imageType, userId);
+  const genAIResult = await callGenAIonImage(imageUri);
+  if (genAIResult.error) throw genAIResult.error;
+  const { data: genAIResultData } = genAIResult;
+  if (!genAIResultData) throw new Error("GenAI result is null");
+  await insertGenAIResult(genAIResultData, userId, imageUri);
+};
+
+const processImage = async (
+  asset: ImagePicker.ImagePickerAsset,
+  userId: string
+) => {
+  const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+    encoding: "base64",
+  });
+  const imageType = asset.mimeType || "image/jpeg";
+  await runImagePipeline(base64, imageType, userId);
+};
 
 const navigateToFoodDetail = (foodId: string) => {
   router.push({ pathname: "/recipe-detail", params: { id: foodId } });
 };
 
-export default function HomeScreen() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filteredRecipes, setFilteredRecipes] = useState(foodHighlights);
+const handleImageSelection = async (
+  pickerFn:
+    | typeof ImagePicker.launchCameraAsync
+    | typeof ImagePicker.launchImageLibraryAsync
+) => {
+  const result = await pickerFn({
+    mediaTypes: ["images"],
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 1,
+  });
 
-  // Handle search
-  const handleSearch = (text: string): void => {
-    setSearchQuery(text);
-    if (text) {
-      const filtered = foodHighlights.filter((food) =>
-        food.name.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredRecipes(filtered);
-    } else {
-      setFilteredRecipes(foodHighlights);
-    }
-  };
-
-  // Handle camera
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-
-    if (status !== "granted") {
+  if (!result.canceled) {
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data?.user?.id) throw new Error("Cannot get user id");
+      const userId = data.user.id;
+      await processImage(result.assets[0], userId);
+    } catch (err) {
       Alert.alert(
-        "Permission needed",
-        "Please grant camera permissions to use this feature."
+        "Image Processing Failed",
+        (err as Error).message || "Unknown error"
       );
-      return;
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      // Navigate to recipe detail with the captured image
-      router.push({
-        pathname: "/recipe-detail",
-        params: {
-          title: "My New Recipe",
-          image: result.assets[0].uri,
-        },
-      });
-    }
-  };
-
-  // Handle gallery
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission needed",
-        "Please grant media library permissions to use this feature."
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      // Navigate to recipe detail with the selected image
-      router.push({
-        pathname: "/recipe-detail",
-        params: {
-          title: "My New Recipe",
-          image: result.assets[0].uri,
-        },
-      });
-    }
-  };
-
-  // Navigate to recipe detail
-  interface Recipe {
-    id: number;
-    title: string;
-    image: string;
-    color: string;
-  }
-
-  const goToRecipeDetail = (recipe: Recipe): void => {
     router.push({
       pathname: "/recipe-detail",
       params: {
-        title: recipe.title,
-        image: recipe.image,
+        title: "My New Recipe",
+        image: result.assets[0].uri,
       },
     });
-  };
+  }
+};
+
+export default function HomeScreen() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const { data: foodsData = [], isLoading, error } = useFoodsQuery();
+
+  const filteredFoods = useMemo(() => {
+    return searchQuery
+      ? foodsData.filter((food) =>
+          food.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : foodsData;
+  }, [foodsData, searchQuery]);
 
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" />
 
-      {/* Header - Fixed at top */}
       <View className="flex-row justify-between items-center px-6 pt-4 pb-2">
         <Text className="text-3xl font-bold">Hi! Mr. Chef</Text>
         <View className="bg-[#ffd60a] p-3 rounded-lg">
@@ -164,13 +118,11 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Scrollable Content */}
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* Show your dishes */}
         <View className="px-6 mb-6">
           <View className="flex-row items-center mb-4">
             <Text className="text-2xl font-bold mr-2">Show your dishes</Text>
@@ -182,7 +134,7 @@ export default function HomeScreen() {
               className="flex-1"
               placeholder="Search..."
               value={searchQuery}
-              onChangeText={handleSearch}
+              onChangeText={setSearchQuery}
             />
             <View className="bg-[#ffd60a] p-2 rounded-full">
               <Feather name="send" size={20} color="black" />
@@ -192,7 +144,18 @@ export default function HomeScreen() {
           <View className="flex-row justify-between">
             <TouchableOpacity
               className="bg-[#ffd60a] p-4 rounded-xl w-[48%]"
-              onPress={takePhoto}
+              onPress={async () => {
+                const { status } =
+                  await ImagePicker.requestCameraPermissionsAsync();
+                if (status !== "granted") {
+                  Alert.alert(
+                    "Permission needed",
+                    "Please grant camera permissions."
+                  );
+                  return;
+                }
+                await handleImageSelection(ImagePicker.launchCameraAsync);
+              }}
             >
               <View className="items-center">
                 <FontAwesome name="camera" size={24} color="black" />
@@ -202,10 +165,20 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
-
             <TouchableOpacity
               className="bg-[#f9be25] p-4 rounded-xl w-[48%]"
-              onPress={pickImage}
+              onPress={async () => {
+                const { status } =
+                  await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (status !== "granted") {
+                  Alert.alert(
+                    "Permission needed",
+                    "Please grant gallery permissions."
+                  );
+                  return;
+                }
+                await handleImageSelection(ImagePicker.launchImageLibraryAsync);
+              }}
             >
               <View className="items-center">
                 <Feather name="image" size={24} color="black" />
@@ -216,62 +189,76 @@ export default function HomeScreen() {
               </View>
             </TouchableOpacity>
           </View>
-        </View>
-        {/* Highlights Section */}
-        <View className="px-6 mb-6">
-          <View className="flex-row items-center mb-4">
-            <Text className="text-2xl font-bold mr-2">Highlights</Text>
-            <FontAwesome name="star" size={20} color="#ffd60a" />
-          </View>
-          <View className="w-full">
-            {foodHighlights.map((food) => (
-              <TouchableOpacity
-                key={food.id}
-                className="flex-row bg-white rounded-xl mb-3 shadow-sm overflow-hidden"
-                style={{
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}
-                onPress={() => navigateToFoodDetail(String(food.id))}
-              >
-                <Image
-                  source={food.image}
-                  className="w-[88px] h-[88px] rounded-l-xl"
-                  resizeMode="cover"
-                />
-                <View className="flex-1 p-3 justify-between">
-                  <Text
-                    className="text-base font-bold text-[#333] mb-1"
-                    numberOfLines={1}
-                  >
-                    {food.name}
-                  </Text>
-                  <Text className="text-sm text-[#666] mb-2" numberOfLines={1}>
-                    {food.description}
-                  </Text>
-                  <View className="flex-row justify-between">
-                    <View className="flex-row items-center">
-                      <IconSymbol name="clock" size={12} color="#666666" />
-                      <Text className="text-xs text-[#666] ml-1">
-                        {food.time}
-                      </Text>
-                    </View>
-                    <View className="flex-row items-center">
-                      <IconSymbol name="flame" size={12} color="#666666" />
-                      <Text className="text-xs text-[#666] ml-1">
-                        {food.calories}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
 
+          <View className="px-6 mb-6">
+            <View className="flex-row items-center mb-4">
+              <Text className="text-2xl font-bold mr-2">Highlights</Text>
+              <Ionicons name="star-outline" size={20} color="#bb0718" />
+            </View>
+            {isLoading ? (
+              <Text className="text-center text-gray-500">
+                Loading highlights...
+              </Text>
+            ) : error ? (
+              <Text className="text-center text-red-600">
+                Failed to load highlights
+              </Text>
+            ) : filteredFoods.length === 0 ? (
+              <Text className="text-center text-gray-400">
+                No highlights available
+              </Text>
+            ) : (
+              <View className="flex-row justify-between">
+                {filteredFoods.map((food, idx) => (
+                  <TouchableOpacity
+                    key={food.id}
+                    className="bg-white rounded-xl shadow-md flex-1 mr-4"
+                    style={{
+                      marginRight: idx === filteredFoods.length - 1 ? 0 : 12,
+                    }}
+                    onPress={() => navigateToFoodDetail(food.id)}
+                  >
+                    {food.image_url ? (
+                      <Image
+                        source={{ uri: food.image_url }}
+                        className="w-full h-32 rounded-t-xl"
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View className="w-full h-32 rounded-t-xl bg-gray-200 items-center justify-center">
+                        <Text className="text-gray-400">No Image</Text>
+                      </View>
+                    )}
+                    <View className="flex-1 p-3 justify-between">
+                      <Text
+                        className="text-base font-bold text-[#333] mb-1"
+                        numberOfLines={1}
+                      >
+                        {food.name}
+                      </Text>
+                      <Text
+                        className="text-sm text-[#666] mb-2"
+                        numberOfLines={1}
+                      >
+                        {food.description || "No description"}
+                      </Text>
+                      <View className="flex-row justify-between">
+                        <View className="flex-row items-center">
+                          <IconSymbol name="clock" size={12} color="#666" />
+                          <Text className="text-xs text-[#666] ml-1">
+                            {food.time_to_cook_minutes
+                              ? `${food.time_to_cook_minutes} min`
+                              : "-"}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
         {/* Extra space at bottom */}
         <View className="h-20"></View>
       </ScrollView>

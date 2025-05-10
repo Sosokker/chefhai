@@ -33,4 +33,31 @@ interface CookingStep {
     description: string
 }
 
-export { CookingStep, Foods, LikedFood, SavedFood };
+interface GenAIResult {
+  foods: {
+    name: string;
+    description: string;
+    time_to_cook_minutes: number;
+    skill_level: "Easy" | "Medium" | "Hard";
+    ingredient_count: number;
+    calories: number;
+  };
+  cooking_steps: {
+    title: string;
+    description: string;
+    step_order: number;
+  }[];
+  ingredients: {
+    name: string;
+    emoji: string;
+  }[];
+  nutrients: {
+    fat_g: number;
+    fiber_g: number;
+    protein_g: number;
+    carbs_g: number;
+  };
+}
+
+export { CookingStep, Foods, GenAIResult, LikedFood, SavedFood };
+
