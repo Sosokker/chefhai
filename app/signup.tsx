@@ -37,7 +37,7 @@ export default function SignupScreen() {
     try {
       setIsLoading(true);
       // Only pass email and password to signup, as per new auth-context
-      await signup(email, password);
+      await signup(name, email);
       // Optionally, save name to profile after signup here in the future
       router.push("/login");
     } catch (error) {

@@ -10,6 +10,8 @@ export async function getProfile(userId: string): Promise<{
         updated_at: any;
         username: any;
         avatar_url: any;
+        full_name?: any;
+        website?: any;
     } | null;
     error: PostgrestError | null;
 }> {
@@ -19,7 +21,9 @@ export async function getProfile(userId: string): Promise<{
         id,
         updated_at,
         username,
-        avatar_url
+        full_name,
+        avatar_url,
+        website
         `)
       .eq('id', userId)
       .single()
@@ -33,7 +37,9 @@ export async function getProfile(userId: string): Promise<{
 export async function updateProfile(
   userId: string,
   username?: string | null,
-  avatar_url?: string | null
+  avatar_url?: string | null,
+  full_name?: string | null,
+  website?: string | null
 ): Promise<{ data: any; error: PostgrestError | null }> {
   const updateData: Record<string, string | null> = {}
   if (username !== undefined && username !== null) {
@@ -42,6 +48,12 @@ export async function updateProfile(
   if (avatar_url !== undefined && avatar_url !== null) {
     updateData.avatar_url = avatar_url
   }
+  if (full_name !== undefined && full_name !== null) {
+    updateData.full_name = full_name
+  }
+  if (website !== undefined && website !== null) {
+    updateData.website = website
+  }
 
   const { data, error } = await supabase
     .from('profiles')
@@ -49,6 +61,31 @@ export async function updateProfile(
     .eq('id', userId)
     .select()
     .single()
+
+  return { data, error }
+}
+
+/**
+ * Gets multiple user profiles by their IDs
+ */
+export async function getProfiles(userIds: string[]): Promise<{
+  data: {
+    id: any;
+    username: any;
+    avatar_url: any;
+    full_name?: any;
+  }[] | null;
+  error: PostgrestError | null;
+}> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(`
+      id,
+      username,
+      full_name,
+      avatar_url
+    `)
+    .in('id', userIds)
 
   return { data, error }
 }
