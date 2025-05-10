@@ -1,23 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, TextInput, TouchableOpacity, FlatList, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
-import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Feather, FontAwesome } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../context/auth-context';
-import { getFoods } from '../../services/data/foods';
-import { 
-  getLikesCount, 
-  getSavesCount, 
-  getCommentsCount, 
-  createLike, 
-  deleteLike, 
-  createSave, 
-  deleteSave,
-  checkUserLiked,
-  checkUserSaved
-} from '../../services/data/forum';
-import { getProfile } from '../../services/data/profile';
-import { Food, Profile } from '../../types/index';
 import { supabase } from '../../services/supabase';
+import { 
+  useFoods, 
+  useFoodStats, 
+  useFoodCreators, 
+  useUserInteractions,
+  useLikeMutation,
+  useSaveMutation
+} from '../../hooks/use-foods';
 
 // Categories for filtering
 const categories = [
@@ -37,13 +31,8 @@ export default function ForumScreen() {
   const { isAuthenticated } = useAuth();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [foods, setFoods] = useState<Food[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSort, setSelectedSort] = useState('rating');
-  const [foodStats, setFoodStats] = useState<{[key: string]: {likes: number, saves: number, comments: number}}>({});
-  const [foodCreators, setFoodCreators] = useState<{[key: string]: Profile}>({});
-  const [userInteractions, setUserInteractions] = useState<{[key: string]: {liked: boolean, saved: boolean}}>({});
   
   // Get current user ID from Supabase session
   useEffect(() => {
@@ -61,169 +50,53 @@ export default function ForumScreen() {
     getCurrentUser();
   }, [isAuthenticated]);
   
-  // Set up real-time subscription for likes and saves
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    
-    const likesSubscription = supabase
-      .channel('food_likes_changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'food_likes'
-      }, () => {
-        // Refresh stats when changes occur
-        loadFoods();
-      })
-      .subscribe();
-      
-    const savesSubscription = supabase
-      .channel('food_saves_changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'food_saves'
-      }, () => {
-        // Refresh stats when changes occur
-        loadFoods();
-      })
-      .subscribe();
-      
-    return () => {
-      supabase.removeChannel(likesSubscription);
-      supabase.removeChannel(savesSubscription);
-    };
-  }, [isAuthenticated]);
+  // Use React Query hooks
+  const { 
+    data: foods = [], 
+    isLoading: isLoadingFoods,
+    refetch: refetchFoods
+  } = useFoods(selectedCategory, searchQuery, selectedSort);
   
-  useEffect(() => {
-    loadFoods();
-  }, [selectedCategory, selectedSort, currentUserId]);
+  const foodIds = foods.map(food => food.id);
   
-  const loadFoods = async () => {
-    setLoading(true);
-    try {
-      // In a real app, you would filter by category and sort accordingly
-      const { data, error } = await getFoods(undefined, true, searchQuery);
-      
-      if (error) {
-        console.error('Error loading foods:', error);
-        return;
-      }
-      
-      if (data) {
-        // Sort data based on selectedSort
-        let sortedData = [...data];
-        if (selectedSort === 'rating') {
-          // Assuming higher calories means higher rating for demo purposes
-          sortedData.sort((a, b) => (b.calories ?? 0) - (a.calories ?? 0));
-        } else if (selectedSort === 'newest') {
-          sortedData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        } else if (selectedSort === 'best') {
-          // Assuming higher ingredient_count means better for demo purposes
-          sortedData.sort((a, b) => (b.ingredient_count ?? 0) - (a.ingredient_count ?? 0));
-        }
-        
-        setFoods(sortedData.map(food => ({
-          ...food,
-          description: food.description || '', // Ensure description is always a string
-          ingredient_count: food.ingredient_count ?? 0, // Ensure ingredient_count is always a number
-          calories: food.calories ?? 0, // Ensure calories is always a number
-          image_url: food.image_url || '', // Ensure image_url is always a string
-        })));
-        
-        // Load stats for each food
-        const statsPromises = sortedData.map(async (food) => {
-          const [likesRes, savesRes, commentsRes] = await Promise.all([
-            getLikesCount(food.id),
-            getSavesCount(food.id),
-            getCommentsCount(food.id)
-          ]);
-          
-          return {
-            foodId: food.id,
-            likes: likesRes.count || 0,
-            saves: savesRes.count || 0,
-            comments: commentsRes.count || 0
-          };
-        });
-        
-        const stats = await Promise.all(statsPromises);
-        const statsMap = stats.reduce((acc, stat) => {
-          acc[stat.foodId] = {
-            likes: stat.likes,
-            saves: stat.saves,
-            comments: stat.comments
-          };
-          return acc;
-        }, {} as {[key: string]: {likes: number, saves: number, comments: number}});
-        
-        setFoodStats(statsMap);
-        
-        // Load creator profiles
-        const creatorIds = sortedData
-          .filter(food => food.created_by)
-          .map(food => food.created_by as string);
-        
-        const uniqueCreatorIds = [...new Set(creatorIds)];
-        
-        const creatorProfiles: {[key: string]: Profile} = {};
-        
-        for (const creatorId of uniqueCreatorIds) {
-          const { data: profile } = await getProfile(creatorId);
-          if (profile) {
-            creatorProfiles[creatorId] = profile;
-          }
-        }
-        
-        setFoodCreators(creatorProfiles);
-        
-        // Check user interactions if authenticated
-        if (isAuthenticated && currentUserId) {
-          const interactionsPromises = sortedData.map(async (food) => {
-            const [likedRes, savedRes] = await Promise.all([
-              checkUserLiked(food.id, currentUserId),
-              checkUserSaved(food.id, currentUserId)
-            ]);
-            
-            return {
-              foodId: food.id,
-              liked: !!likedRes.data,
-              saved: !!savedRes.data
-            };
-          });
-          
-          const interactions = await Promise.all(interactionsPromises);
-          const interactionsMap = interactions.reduce((acc, interaction) => {
-            acc[interaction.foodId] = {
-              liked: interaction.liked,
-              saved: interaction.saved
-            };
-            return acc;
-          }, {} as {[key: string]: {liked: boolean, saved: boolean}});
-          
-          setUserInteractions(interactionsMap);
-        }
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { 
+    data: foodStats = {}, 
+    isLoading: isLoadingStats 
+  } = useFoodStats(foodIds);
+  
+  const creatorIds = foods
+    .filter(food => food.created_by)
+    .map(food => food.created_by as string);
+  
+  const { 
+    data: foodCreators = {}, 
+    isLoading: isLoadingCreators 
+  } = useFoodCreators(creatorIds);
+  
+  const { 
+    data: userInteractions = {}, 
+    isLoading: isLoadingInteractions 
+  } = useUserInteractions(foodIds, currentUserId);
+  
+  const likeMutation = useLikeMutation();
+  const saveMutation = useSaveMutation();
+  
+  // Refetch data when the screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      refetchFoods();
+    }, [refetchFoods])
+  );
   
   const handleSearch = (text: string) => {
     setSearchQuery(text);
-    // Debounce search for better performance
-    setTimeout(() => {
-      loadFoods();
-    }, 500);
   };
   
-const navigateToPostDetail = (food: Food) => {
-  router.push(`/post-detail/${food.id}`);
-};
+  const navigateToPostDetail = (food: { id: string }) => {
+    router.push(`/post-detail/${food.id}`);
+  };
   
-  const handleLike = async (food: Food) => {
+  const handleLike = async (food: { id: string }) => {
     if (!isAuthenticated || !currentUserId) {
       Alert.alert('Authentication Required', 'Please log in to like posts.');
       return;
@@ -232,77 +105,18 @@ const navigateToPostDetail = (food: Food) => {
     try {
       const isLiked = userInteractions[food.id]?.liked || false;
       
-      // Optimistically update UI
-      setUserInteractions(prev => ({
-        ...prev,
-        [food.id]: {
-          ...prev[food.id],
-          liked: !isLiked
-        }
-      }));
-      
-      setFoodStats(prev => ({
-        ...prev,
-        [food.id]: {
-          ...prev[food.id],
-          likes: isLiked ? Math.max(0, prev[food.id].likes - 1) : prev[food.id].likes + 1
-        }
-      }));
-      
-      if (isLiked) {
-        const { error } = await deleteLike(food.id, currentUserId);
-        if (error) {
-          console.error('Error deleting like:', error);
-          // Revert optimistic update if there's an error
-          setUserInteractions(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              liked: true
-            }
-          }));
-          
-          setFoodStats(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              likes: prev[food.id].likes + 1
-            }
-          }));
-          
-          Alert.alert('Error', 'Failed to unlike. Please try again.');
-        }
-      } else {
-        const { error } = await createLike(food.id, currentUserId);
-        if (error) {
-          console.error('Error creating like:', error);
-          // Revert optimistic update if there's an error
-          setUserInteractions(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              liked: false
-            }
-          }));
-          
-          setFoodStats(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              likes: Math.max(0, prev[food.id].likes - 1)
-            }
-          }));
-          
-          Alert.alert('Error', 'Failed to like. Please try again.');
-        }
-      }
+      likeMutation.mutate({
+        foodId: food.id,
+        userId: currentUserId,
+        isLiked
+      });
     } catch (error) {
       console.error('Error toggling like:', error);
       Alert.alert('Error', 'Failed to update like. Please try again.');
     }
   };
   
-  const handleSave = async (food: Food) => {
+  const handleSave = async (food: { id: string }) => {
     if (!isAuthenticated || !currentUserId) {
       Alert.alert('Authentication Required', 'Please log in to save posts.');
       return;
@@ -311,77 +125,18 @@ const navigateToPostDetail = (food: Food) => {
     try {
       const isSaved = userInteractions[food.id]?.saved || false;
       
-      // Optimistically update UI
-      setUserInteractions(prev => ({
-        ...prev,
-        [food.id]: {
-          ...prev[food.id],
-          saved: !isSaved
-        }
-      }));
-      
-      setFoodStats(prev => ({
-        ...prev,
-        [food.id]: {
-          ...prev[food.id],
-          saves: isSaved ? Math.max(0, prev[food.id].saves - 1) : prev[food.id].saves + 1
-        }
-      }));
-      
-      if (isSaved) {
-        const { error } = await deleteSave(food.id, currentUserId);
-        if (error) {
-          console.error('Error deleting save:', error);
-          // Revert optimistic update if there's an error
-          setUserInteractions(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              saved: true
-            }
-          }));
-          
-          setFoodStats(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              saves: prev[food.id].saves + 1
-            }
-          }));
-          
-          Alert.alert('Error', 'Failed to unsave. Please try again.');
-        }
-      } else {
-        const { error } = await createSave(food.id, currentUserId);
-        if (error) {
-          console.error('Error creating save:', error);
-          // Revert optimistic update if there's an error
-          setUserInteractions(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              saved: false
-            }
-          }));
-          
-          setFoodStats(prev => ({
-            ...prev,
-            [food.id]: {
-              ...prev[food.id],
-              saves: Math.max(0, prev[food.id].saves - 1)
-            }
-          }));
-          
-          Alert.alert('Error', 'Failed to save. Please try again.');
-        }
-      }
+      saveMutation.mutate({
+        foodId: food.id,
+        userId: currentUserId,
+        isSaved
+      });
     } catch (error) {
       console.error('Error toggling save:', error);
       Alert.alert('Error', 'Failed to update save. Please try again.');
     }
   };
   
-  const renderFoodItem = ({ item }: { item: Food }) => {
+  const renderFoodItem = ({ item }: { item: any }) => {
     // Get stats for this food
     const stats = foodStats[item.id] || { likes: 0, saves: 0, comments: 0 };
     
@@ -484,6 +239,8 @@ const navigateToPostDetail = (food: Food) => {
     );
   };
   
+  const isLoading = isLoadingFoods || isLoadingStats || isLoadingCreators || isLoadingInteractions;
+  
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Search Bar */}
@@ -537,7 +294,7 @@ const navigateToPostDetail = (food: Food) => {
       </View>
       
       {/* Food Posts */}
-      {loading ? (
+      {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#ffd60a" />
         </View>

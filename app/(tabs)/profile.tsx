@@ -140,7 +140,7 @@ export default function ProfileScreen() {
       refetchMyRecipes()
     } else if (tab === "Likes") {
       refetchLikes()
-    } else if (tab === "Bookmark") {
+    } else if (tab === "Bookmarks") {
       refetchBookmarks()
     }
   }
@@ -226,7 +226,7 @@ export default function ProfileScreen() {
         return { data: myRecipesData, isLoading: isMyRecipesLoading, error: myRecipesError }
       case "Likes":
         return { data: likesData, isLoading: isLikesLoading, error: likesError }
-      case "Bookmark":
+      case "Bookmarks":
         return { data: bookmarksData, isLoading: isBookmarksLoading, error: bookmarksError }
       default:
         return { data: myRecipesData, isLoading: isMyRecipesLoading, error: myRecipesError }
@@ -334,7 +334,7 @@ export default function ProfileScreen() {
 
         {/* Tab Navigation */}
         <View className="flex-row justify-around py-3 border-b border-gray-200">
-          {["My Recipes", "Likes", "Bookmark"].map((tab) => (
+          {["My Recipes", "Likes", "Bookmarks"].map((tab) => (
             <TouchableOpacity
               key={tab}
               className={`py-2 px-4 ${activeTab === tab ? "border-b-2 border-[#333]" : ""}`}

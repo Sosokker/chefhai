@@ -3,6 +3,8 @@ import { View, Text, Image, TouchableOpacity, ScrollView, SafeAreaView, Activity
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAuth } from '../../context/auth-context';
+import { supabase } from '../../services/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFoods, getIngredients, getNutrients } from '../../services/data/foods';
 import { 
   createLike, 
@@ -19,32 +21,20 @@ import {
 } from '../../services/data/forum';
 import { getProfile } from '../../services/data/profile';
 import { Food, Ingredient, Nutrient, FoodComment, Profile } from '../../types/index';
-import { supabase } from '../../services/supabase';
+import { queryKeys, useLikeMutation, useSaveMutation } from '../../hooks/use-foods';
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();
   const foodId = typeof id === 'string' ? id : '';
+  const queryClient = useQueryClient();
                  
   console.log('Post detail screen - Food ID:', foodId);
   
   const { isAuthenticated } = useAuth();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [food, setFood] = useState<Food | null>(null);
-  const [foodCreator, setFoodCreator] = useState<Profile | null>(null);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [nutrients, setNutrients] = useState<Nutrient | null>(null);
-  const [comments, setComments] = useState<FoodComment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isLiked, setIsLiked] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [showReviews, setShowReviews] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
-  const [stats, setStats] = useState({
-    likes: 0,
-    saves: 0,
-    comments: 0
-  });
+  const [showReviews, setShowReviews] = useState(true);
   
   // Get current user ID from Supabase session
   useEffect(() => {
@@ -62,14 +52,128 @@ export default function PostDetailScreen() {
     getCurrentUser();
   }, [isAuthenticated]);
   
-  useEffect(() => {
-    if (foodId) {
-      console.log('Loading food details for ID:', foodId);
-      loadFoodDetails();
-    } else {
-      console.error('No food ID provided');
-    }
-  }, [foodId]);
+  // Fetch food details
+  const { 
+    data: food,
+    isLoading: isLoadingFood,
+    error: foodError
+  } = useQuery({
+    queryKey: queryKeys.foodDetails(foodId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('foods')
+        .select('*')
+        .eq('id', foodId)
+        .single();
+        
+      if (error) throw error;
+      
+      return {
+        ...data,
+        description: data.description || '',
+        ingredient_count: data.ingredient_count ?? 0,
+        calories: data.calories ?? 0,
+        image_url: data.image_url || '',
+      };
+    },
+    enabled: !!foodId,
+  });
+  
+  // Fetch food creator
+  const { 
+    data: foodCreator,
+    isLoading: isLoadingCreator
+  } = useQuery({
+    queryKey: ['food-creator', food?.created_by],
+    queryFn: async () => {
+      if (!food?.created_by) return null;
+      
+      const { data, error } = await getProfile(food.created_by);
+      
+      if (error) throw error;
+      
+      return data;
+    },
+    enabled: !!food?.created_by,
+  });
+  
+  // Fetch food stats
+  const { 
+    data: stats = { likes: 0, saves: 0, comments: 0 },
+    isLoading: isLoadingStats,
+    refetch: refetchStats
+  } = useQuery({
+    queryKey: ['food-stats', foodId],
+    queryFn: async () => {
+      const [likesRes, savesRes, commentsRes] = await Promise.all([
+        getLikesCount(foodId),
+        getSavesCount(foodId),
+        getCommentsCount(foodId)
+      ]);
+      
+      return {
+        likes: likesRes.count || 0,
+        saves: savesRes.count || 0,
+        comments: commentsRes.count || 0
+      };
+    },
+    enabled: !!foodId,
+  });
+  
+  // Fetch user interactions
+  const { 
+    data: interactions = { liked: false, saved: false },
+    isLoading: isLoadingInteractions,
+    refetch: refetchInteractions
+  } = useQuery({
+    queryKey: ['user-interactions', foodId, currentUserId],
+    queryFn: async () => {
+      if (!currentUserId) return { liked: false, saved: false };
+      
+      const [likedRes, savedRes] = await Promise.all([
+        checkUserLiked(foodId, currentUserId),
+        checkUserSaved(foodId, currentUserId)
+      ]);
+      
+      return {
+        liked: !!likedRes.data,
+        saved: !!savedRes.data
+      };
+    },
+    enabled: !!foodId && !!currentUserId,
+  });
+  
+  // Fetch comments
+  const { 
+    data: comments = [],
+    isLoading: isLoadingComments,
+    refetch: refetchComments
+  } = useQuery({
+    queryKey: queryKeys.foodComments(foodId),
+    queryFn: async () => {
+      const { data, error } = await getComments(foodId);
+      
+      if (error) throw error;
+      
+      return data || [];
+    },
+    enabled: !!foodId,
+  });
+  
+  // Set up mutations
+  const likeMutation = useLikeMutation();
+  const saveMutation = useSaveMutation();
+  
+  const commentMutation = useMutation({
+    mutationFn: async ({ foodId, userId, content }: { foodId: string, userId: string, content: string }) => {
+      return createComment(foodId, userId, content);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodComments(foodId) });
+      queryClient.invalidateQueries({ queryKey: ['food-stats', foodId] });
+      setCommentText('');
+    },
+  });
   
   // Set up real-time subscription for comments
   useEffect(() => {
@@ -84,167 +188,55 @@ export default function PostDetailScreen() {
         schema: 'public', 
         table: 'food_comments',
         filter: `food_id=eq.${foodId}`
-      }, (payload) => {
-        console.log('Comment change detected:', payload);
-        // Refresh comments when changes occur
-        refreshComments();
+      }, () => {
+        console.log('Comment change detected, refreshing comments');
+        refetchComments();
+        refetchStats();
       })
       .subscribe();
       
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, [foodId]);
+  }, [foodId, refetchComments, refetchStats]);
   
-  // Check if user has liked/saved when user ID changes
+  // Set up real-time subscription for likes and saves
   useEffect(() => {
-    if (foodId && currentUserId && food) {
-      checkUserInteractions();
-    }
-  }, [currentUserId, foodId, food]);
-  
-  const checkUserInteractions = async () => {
-    if (!currentUserId || !foodId) return;
+    if (!foodId) return;
     
-    try {
-      console.log('Checking user interactions with user ID:', currentUserId);
+    const likesSubscription = supabase
+      .channel(`food_likes:${foodId}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'food_likes',
+        filter: `food_id=eq.${foodId}`
+      }, () => {
+        console.log('Like change detected, refreshing stats and interactions');
+        refetchStats();
+        refetchInteractions();
+      })
+      .subscribe();
       
-      const [likedRes, savedRes] = await Promise.all([
-        checkUserLiked(foodId, currentUserId),
-        checkUserSaved(foodId, currentUserId)
-      ]);
+    const savesSubscription = supabase
+      .channel(`food_saves:${foodId}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'food_saves',
+        filter: `food_id=eq.${foodId}`
+      }, () => {
+        console.log('Save change detected, refreshing stats and interactions');
+        refetchStats();
+        refetchInteractions();
+      })
+      .subscribe();
       
-      console.log('User liked:', !!likedRes.data);
-      console.log('User saved:', !!savedRes.data);
-      
-      setIsLiked(!!likedRes.data);
-      setIsSaved(!!savedRes.data);
-    } catch (error) {
-      console.error('Error checking user interactions:', error);
-    }
-  };
-  
-  const refreshComments = async () => {
-    if (!foodId) {
-      console.error('Cannot refresh comments: No food ID');
-      return;
-    }
-    
-    try {
-      console.log(`Refreshing comments for food_id: ${foodId}`);
-      
-      const { data: commentsData, error } = await getComments(foodId);
-      
-      if (error) {
-        console.error('Error refreshing comments:', error);
-        return;
-      }
-      
-      if (commentsData) {
-        console.log(`Refreshed ${commentsData.length} comments for food_id: ${foodId}`);
-        setComments(commentsData);
-      }
-      
-      const { count } = await getCommentsCount(foodId);
-      setStats(prev => ({ ...prev, comments: count || 0 }));
-    } catch (error) {
-      console.error('Error refreshing comments:', error);
-    }
-  };
-  
-  const loadFoodDetails = async () => {
-    if (!foodId) {
-      console.error('Cannot load food details: No food ID');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      console.log('Loading food details for ID:', foodId);
-      
-      // Get specific food by ID
-      const { data: foodData, error: foodError } = await supabase
-        .from('foods')
-        .select('*')
-        .eq('id', foodId)
-        .single();
-      
-      if (foodError) {
-        console.error('Error loading food:', foodError);
-        return;
-      }
-      
-      if (foodData) {
-        const foodItem = {
-          ...foodData,
-          description: foodData.description || '', 
-          ingredient_count: foodData.ingredient_count ?? 0,
-          calories: foodData.calories ?? 0,
-          image_url: foodData.image_url || '',
-        };
-        
-        console.log('Food loaded:', foodItem.name);
-        setFood(foodItem);
-        
-        // Get food creator profile
-        if (foodItem.created_by) {
-          console.log('Loading creator profile for:', foodItem.created_by);
-          const { data: creatorProfile } = await getProfile(foodItem.created_by);
-          if (creatorProfile) {
-            setFoodCreator(creatorProfile);
-          }
-        }
-        
-        // Get ingredients
-        const { data: ingredientsData, error: ingredientsError } = await getIngredients(foodId);
-        
-        if (!ingredientsError && ingredientsData) {
-          setIngredients(ingredientsData);
-        }
-        
-        // Get nutrients
-        const { data: nutrientsData, error: nutrientsError } = await getNutrients(foodId);
-        
-        if (!nutrientsError && nutrientsData) {
-          setNutrients(nutrientsData);
-        }
-        
-        // Get comments for this specific food ID
-        const { data: commentsData, error: commentsError } = await getComments(foodId);
-        
-        if (commentsError) {
-          console.error('Error loading comments:', commentsError);
-        } else if (commentsData) {
-          console.log(`Loaded ${commentsData.length} comments for food_id: ${foodId}`);
-          setComments(commentsData);
-        }
-        
-        // Get stats
-        const [likesRes, savesRes, commentsRes] = await Promise.all([
-          getLikesCount(foodId),
-          getSavesCount(foodId),
-          getCommentsCount(foodId)
-        ]);
-        
-        console.log('Stats loaded:', { 
-          likes: likesRes.count || 0, 
-          saves: savesRes.count || 0, 
-          comments: commentsRes.count || 0 
-        });
-        
-        setStats({
-          likes: likesRes.count || 0,
-          saves: savesRes.count || 0,
-          comments: commentsRes.count || 0
-        });
-      }
-    } catch (error) {
-      console.error('Error loading food details:', error);
-      Alert.alert('Error', 'Failed to load food details. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      supabase.removeChannel(likesSubscription);
+      supabase.removeChannel(savesSubscription);
+    };
+  }, [foodId, refetchStats, refetchInteractions]);
   
   const handleLike = async () => {
     if (!isAuthenticated || !currentUserId || !food) {
@@ -253,42 +245,13 @@ export default function PostDetailScreen() {
     }
     
     try {
-      console.log('Toggling like with user ID:', currentUserId, 'and food ID:', foodId);
-      
-      // Optimistically update UI
-      setIsLiked(!isLiked);
-      setStats(prev => ({ 
-        ...prev, 
-        likes: isLiked ? Math.max(0, prev.likes - 1) : prev.likes + 1 
-      }));
-      
-      if (isLiked) {
-        const { error } = await deleteLike(foodId, currentUserId);
-        if (error) {
-          console.error('Error deleting like:', error);
-          // Revert optimistic update if there's an error
-          setIsLiked(true);
-          setStats(prev => ({ ...prev, likes: prev.likes + 1 }));
-          Alert.alert('Error', 'Failed to unlike. Please try again.');
-        }
-      } else {
-        const { error } = await createLike(foodId, currentUserId);
-        if (error) {
-          console.error('Error creating like:', error);
-          // Revert optimistic update if there's an error
-          setIsLiked(false);
-          setStats(prev => ({ ...prev, likes: Math.max(0, prev.likes - 1) }));
-          Alert.alert('Error', 'Failed to like. Please try again.');
-        }
-      }
+      likeMutation.mutate({
+        foodId,
+        userId: currentUserId,
+        isLiked: interactions.liked
+      });
     } catch (error) {
       console.error('Error toggling like:', error);
-      // Revert optimistic update if there's an error
-      setIsLiked(!isLiked);
-      setStats(prev => ({ 
-        ...prev, 
-        likes: !isLiked ? Math.max(0, prev.likes - 1) : prev.likes + 1 
-      }));
       Alert.alert('Error', 'Failed to update like. Please try again.');
     }
   };
@@ -300,42 +263,13 @@ export default function PostDetailScreen() {
     }
     
     try {
-      console.log('Toggling save with user ID:', currentUserId, 'and food ID:', foodId);
-      
-      // Optimistically update UI
-      setIsSaved(!isSaved);
-      setStats(prev => ({ 
-        ...prev, 
-        saves: isSaved ? Math.max(0, prev.saves - 1) : prev.saves + 1 
-      }));
-      
-      if (isSaved) {
-        const { error } = await deleteSave(foodId, currentUserId);
-        if (error) {
-          console.error('Error deleting save:', error);
-          // Revert optimistic update if there's an error
-          setIsSaved(true);
-          setStats(prev => ({ ...prev, saves: prev.saves + 1 }));
-          Alert.alert('Error', 'Failed to unsave. Please try again.');
-        }
-      } else {
-        const { error } = await createSave(foodId, currentUserId);
-        if (error) {
-          console.error('Error creating save:', error);
-          // Revert optimistic update if there's an error
-          setIsSaved(false);
-          setStats(prev => ({ ...prev, saves: Math.max(0, prev.saves - 1) }));
-          Alert.alert('Error', 'Failed to save. Please try again.');
-        }
-      }
+      saveMutation.mutate({
+        foodId,
+        userId: currentUserId,
+        isSaved: interactions.saved
+      });
     } catch (error) {
       console.error('Error toggling save:', error);
-      // Revert optimistic update if there's an error
-      setIsSaved(!isSaved);
-      setStats(prev => ({ 
-        ...prev, 
-        saves: !isSaved ? Math.max(0, prev.saves - 1) : prev.saves + 1 
-      }));
       Alert.alert('Error', 'Failed to update save. Please try again.');
     }
   };
@@ -350,23 +284,11 @@ export default function PostDetailScreen() {
     
     setSubmittingComment(true);
     try {
-      console.log('Submitting comment with user ID:', currentUserId, 'and food ID:', foodId);
-      
-      const { error } = await createComment(foodId, currentUserId, commentText.trim());
-      
-      if (error) {
-        console.error('Error creating comment:', error);
-        Alert.alert('Error', 'Failed to submit comment. Please try again.');
-        return;
-      }
-      
-      // Clear comment text
-      setCommentText('');
-      
-      // Refresh comments
-      await refreshComments();
-      
-      console.log('Comment submitted successfully');
+      await commentMutation.mutateAsync({
+        foodId,
+        userId: currentUserId,
+        content: commentText.trim()
+      });
     } catch (error) {
       console.error('Error submitting comment:', error);
       Alert.alert('Error', 'Failed to submit comment. Please try again.');
@@ -375,7 +297,9 @@ export default function PostDetailScreen() {
     }
   };
   
-  if (loading) {
+  const isLoading = isLoadingFood || isLoadingCreator || isLoadingStats || isLoadingInteractions || isLoadingComments;
+  
+  if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-white">
         <View className="flex-1 items-center justify-center">
@@ -385,7 +309,7 @@ export default function PostDetailScreen() {
     );
   }
   
-  if (!food) {
+  if (foodError || !food) {
     return (
       <SafeAreaView className="flex-1 bg-white">
         <View className="flex-1 items-center justify-center">
@@ -436,13 +360,13 @@ export default function PostDetailScreen() {
                 ) : (
                   <View className="w-full h-full bg-gray-300 items-center justify-center">
                     <Text className="text-lg font-bold text-gray-600">
-                      {foodCreator?.username?.charAt(0).toUpperCase() || '?'}
+                      {foodCreator?.username?.charAt(0).toUpperCase() || food.created_by?.charAt(0).toUpperCase() || '?'}
                     </Text>
                   </View>
                 )}
               </View>
               <Text className="ml-3 text-lg font-bold">
-                {foodCreator?.username || foodCreator?.full_name || 'Unknown Chef'}
+                {foodCreator?.username || foodCreator?.full_name || 'Chef'}
               </Text>
             </View>
             <View className="flex-row items-center">
@@ -471,9 +395,13 @@ export default function PostDetailScreen() {
           
           {/* Interaction buttons */}
           <View className="flex-row justify-between px-4 py-4 border-b border-gray-200">
-            <TouchableOpacity className="flex-row items-center">
-              <Feather name="message-square" size={22} color="#333" />
-              <Text className="ml-2 text-lg">{stats.comments}</Text>
+
+            <TouchableOpacity 
+              className="flex-row items-center"
+              onPress={handleLike}
+              >
+              <Feather name="heart" size={22} color={interactions.liked ? "#E91E63" : "#333"} />
+              <Text className="ml-2 text-lg">{stats.likes}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity className="flex-row items-center">
@@ -481,16 +409,9 @@ export default function PostDetailScreen() {
               <Text className="ml-2 text-lg">{stats.comments}</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity 
-              className="flex-row items-center"
-              onPress={handleLike}
-            >
-              <Feather name="heart" size={22} color={isLiked ? "#E91E63" : "#333"} />
-              <Text className="ml-2 text-lg">{stats.likes}</Text>
-            </TouchableOpacity>
             
             <TouchableOpacity onPress={handleSave}>
-              <Feather name="bookmark" size={22} color={isSaved ? "#ffd60a" : "#333"} />
+              <Feather name="bookmark" size={22} color={interactions.saved ? "#ffd60a" : "#333"} />
             </TouchableOpacity>
           </View>
           
@@ -518,14 +439,14 @@ export default function PostDetailScreen() {
                         ) : (
                           <View className="w-full h-full bg-gray-300 items-center justify-center">
                             <Text className="text-base font-bold text-gray-600">
-                              {comment.user?.username?.charAt(0).toUpperCase() || '?'}
+                              {comment.user?.username?.charAt(0).toUpperCase() || comment.user_id?.charAt(0).toUpperCase() || '?'}
                             </Text>
                           </View>
                         )}
                       </View>
                       <View className="flex-row items-center justify-between flex-1">
                         <Text className="font-bold">
-                          {comment.user?.username || comment.user?.full_name || 'Unknown User'}
+                          {comment.user?.username || comment.user?.full_name || 'User'}
                         </Text>
                         <Text className="text-gray-500 text-xs">
                           {new Date(comment.created_at).toLocaleDateString()}
