@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useAuth } from '../context/auth-context';
-import { getFoods, getIngredients, getNutrients } from '../services/data/foods';
+import { useAuth } from '../../context/auth-context';
+import { getFoods, getIngredients, getNutrients } from '../../services/data/foods';
 import { 
   createLike, 
   deleteLike, 
@@ -16,14 +16,17 @@ import {
   getCommentsCount,
   checkUserLiked,
   checkUserSaved
-} from '../services/data/forum';
-import { getProfile } from '../services/data/profile';
-import { Food, Ingredient, Nutrient, FoodComment, Profile } from '../types/index';
-import { supabase } from '../services/supabase';
+} from '../../services/data/forum';
+import { getProfile } from '../../services/data/profile';
+import { Food, Ingredient, Nutrient, FoodComment, Profile } from '../../types/index';
+import { supabase } from '../../services/supabase';
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();
-  const foodId = Array.isArray(id) ? id[0] : id;
+  const foodId = typeof id === 'string' ? id : '';
+                 
+  console.log('Post detail screen - Food ID:', foodId);
+  
   const { isAuthenticated } = useAuth();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [food, setFood] = useState<Food | null>(null);
@@ -61,13 +64,18 @@ export default function PostDetailScreen() {
   
   useEffect(() => {
     if (foodId) {
+      console.log('Loading food details for ID:', foodId);
       loadFoodDetails();
+    } else {
+      console.error('No food ID provided');
     }
   }, [foodId]);
   
   // Set up real-time subscription for comments
   useEffect(() => {
     if (!foodId) return;
+    
+    console.log(`Setting up real-time subscription for comments on food_id: ${foodId}`);
     
     const subscription = supabase
       .channel(`food_comments:${foodId}`)
@@ -76,31 +84,10 @@ export default function PostDetailScreen() {
         schema: 'public', 
         table: 'food_comments',
         filter: `food_id=eq.${foodId}`
-      }, () => {
+      }, (payload) => {
+        console.log('Comment change detected:', payload);
         // Refresh comments when changes occur
         refreshComments();
-      })
-      .subscribe();
-      
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  }, [foodId]);
-  
-  // Set up real-time subscription for likes
-  useEffect(() => {
-    if (!foodId) return;
-    
-    const subscription = supabase
-      .channel(`food_likes:${foodId}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'food_likes',
-        filter: `food_id=eq.${foodId}`
-      }, () => {
-        // Refresh likes when changes occur
-        refreshLikes();
       })
       .subscribe();
       
@@ -138,11 +125,23 @@ export default function PostDetailScreen() {
   };
   
   const refreshComments = async () => {
-    if (!foodId) return;
+    if (!foodId) {
+      console.error('Cannot refresh comments: No food ID');
+      return;
+    }
     
     try {
-      const { data: commentsData } = await getComments(foodId);
+      console.log(`Refreshing comments for food_id: ${foodId}`);
+      
+      const { data: commentsData, error } = await getComments(foodId);
+      
+      if (error) {
+        console.error('Error refreshing comments:', error);
+        return;
+      }
+      
       if (commentsData) {
+        console.log(`Refreshed ${commentsData.length} comments for food_id: ${foodId}`);
         setComments(commentsData);
       }
       
@@ -153,42 +152,35 @@ export default function PostDetailScreen() {
     }
   };
   
-  const refreshLikes = async () => {
-    if (!foodId || !currentUserId) return;
-    
-    try {
-      const { count } = await getLikesCount(foodId);
-      setStats(prev => ({ ...prev, likes: count || 0 }));
-      
-      const { data } = await checkUserLiked(foodId, currentUserId);
-      setIsLiked(!!data);
-    } catch (error) {
-      console.error('Error refreshing likes:', error);
-    }
-  };
-  
   const loadFoodDetails = async () => {
-    if (!foodId) return;
+    if (!foodId) {
+      console.error('Cannot load food details: No food ID');
+      return;
+    }
     
     setLoading(true);
     try {
       console.log('Loading food details for ID:', foodId);
       
-      // Get food details
-      const { data: foodData, error: foodError } = await getFoods(undefined, undefined, undefined, 1, 0);
+      // Get specific food by ID
+      const { data: foodData, error: foodError } = await supabase
+        .from('foods')
+        .select('*')
+        .eq('id', foodId)
+        .single();
       
       if (foodError) {
         console.error('Error loading food:', foodError);
         return;
       }
       
-      if (foodData && foodData.length > 0) {
+      if (foodData) {
         const foodItem = {
-          ...foodData[0],
-          description: foodData[0].description || '', 
-          ingredient_count: foodData[0].ingredient_count ?? 0,
-          calories: foodData[0].calories ?? 0,
-          image_url: foodData[0].image_url || '',
+          ...foodData,
+          description: foodData.description || '', 
+          ingredient_count: foodData.ingredient_count ?? 0,
+          calories: foodData.calories ?? 0,
+          image_url: foodData.image_url || '',
         };
         
         console.log('Food loaded:', foodItem.name);
@@ -204,32 +196,34 @@ export default function PostDetailScreen() {
         }
         
         // Get ingredients
-        const { data: ingredientsData, error: ingredientsError } = await getIngredients(foodItem.id);
+        const { data: ingredientsData, error: ingredientsError } = await getIngredients(foodId);
         
         if (!ingredientsError && ingredientsData) {
           setIngredients(ingredientsData);
         }
         
         // Get nutrients
-        const { data: nutrientsData, error: nutrientsError } = await getNutrients(foodItem.id);
+        const { data: nutrientsData, error: nutrientsError } = await getNutrients(foodId);
         
         if (!nutrientsError && nutrientsData) {
           setNutrients(nutrientsData);
         }
         
-        // Get comments
-        const { data: commentsData, error: commentsError } = await getComments(foodItem.id);
+        // Get comments for this specific food ID
+        const { data: commentsData, error: commentsError } = await getComments(foodId);
         
-        if (!commentsError && commentsData) {
-          console.log('Comments loaded:', commentsData.length);
+        if (commentsError) {
+          console.error('Error loading comments:', commentsError);
+        } else if (commentsData) {
+          console.log(`Loaded ${commentsData.length} comments for food_id: ${foodId}`);
           setComments(commentsData);
         }
         
         // Get stats
         const [likesRes, savesRes, commentsRes] = await Promise.all([
-          getLikesCount(foodItem.id),
-          getSavesCount(foodItem.id),
-          getCommentsCount(foodItem.id)
+          getLikesCount(foodId),
+          getSavesCount(foodId),
+          getCommentsCount(foodId)
         ]);
         
         console.log('Stats loaded:', { 
@@ -259,7 +253,7 @@ export default function PostDetailScreen() {
     }
     
     try {
-      console.log('Toggling like with user ID:', currentUserId, 'and food ID:', food.id);
+      console.log('Toggling like with user ID:', currentUserId, 'and food ID:', foodId);
       
       // Optimistically update UI
       setIsLiked(!isLiked);
@@ -269,7 +263,7 @@ export default function PostDetailScreen() {
       }));
       
       if (isLiked) {
-        const { error } = await deleteLike(food.id, currentUserId);
+        const { error } = await deleteLike(foodId, currentUserId);
         if (error) {
           console.error('Error deleting like:', error);
           // Revert optimistic update if there's an error
@@ -278,7 +272,7 @@ export default function PostDetailScreen() {
           Alert.alert('Error', 'Failed to unlike. Please try again.');
         }
       } else {
-        const { error } = await createLike(food.id, currentUserId);
+        const { error } = await createLike(foodId, currentUserId);
         if (error) {
           console.error('Error creating like:', error);
           // Revert optimistic update if there's an error
@@ -306,7 +300,7 @@ export default function PostDetailScreen() {
     }
     
     try {
-      console.log('Toggling save with user ID:', currentUserId, 'and food ID:', food.id);
+      console.log('Toggling save with user ID:', currentUserId, 'and food ID:', foodId);
       
       // Optimistically update UI
       setIsSaved(!isSaved);
@@ -316,7 +310,7 @@ export default function PostDetailScreen() {
       }));
       
       if (isSaved) {
-        const { error } = await deleteSave(food.id, currentUserId);
+        const { error } = await deleteSave(foodId, currentUserId);
         if (error) {
           console.error('Error deleting save:', error);
           // Revert optimistic update if there's an error
@@ -325,7 +319,7 @@ export default function PostDetailScreen() {
           Alert.alert('Error', 'Failed to unsave. Please try again.');
         }
       } else {
-        const { error } = await createSave(food.id, currentUserId);
+        const { error } = await createSave(foodId, currentUserId);
         if (error) {
           console.error('Error creating save:', error);
           // Revert optimistic update if there's an error
@@ -347,7 +341,7 @@ export default function PostDetailScreen() {
   };
   
   const handleSubmitComment = async () => {
-    if (!isAuthenticated || !currentUserId || !food || !commentText.trim()) {
+    if (!isAuthenticated || !currentUserId || !foodId || !commentText.trim()) {
       if (!isAuthenticated || !currentUserId) {
         Alert.alert('Authentication Required', 'Please log in to comment.');
       }
@@ -356,9 +350,9 @@ export default function PostDetailScreen() {
     
     setSubmittingComment(true);
     try {
-      console.log('Submitting comment with user ID:', currentUserId, 'and food ID:', food.id);
+      console.log('Submitting comment with user ID:', currentUserId, 'and food ID:', foodId);
       
-      const { error } = await createComment(food.id, currentUserId, commentText.trim());
+      const { error } = await createComment(foodId, currentUserId, commentText.trim());
       
       if (error) {
         console.error('Error creating comment:', error);
