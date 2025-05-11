@@ -47,6 +47,21 @@ export function useFoods(category?: string, search?: string, sort?: string) {
         sortedData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       } else if (sort === 'best') {
         sortedData.sort((a, b) => (b.ingredient_count ?? 0) - (a.ingredient_count ?? 0));
+      } else if (sort === 'like_desc') {
+        // First, we need to get likes count for each food
+        const likesPromises = sortedData.map(async (food) => {
+          const { count } = await getLikesCount(food.id);
+          return { foodId: food.id, likes: count || 0 };
+        });
+        
+        const likesData = await Promise.all(likesPromises);
+        const likesMap = likesData.reduce((acc, item) => {
+          acc[item.foodId] = item.likes;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        // Sort by likes count (high to low)
+        sortedData.sort((a, b) => (likesMap[b.id] || 0) - (likesMap[a.id] || 0));
       }
       
       return sortedData.map(food => ({

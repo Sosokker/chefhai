@@ -1,6 +1,9 @@
+"use client";
+
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { getFoods, insertGenAIResult } from "@/services/data/foods";
 import { uploadImageToSupabase } from "@/services/data/imageUpload";
+import { getProfile } from "@/services/data/profile";
 import { callGenAIonImage } from "@/services/gemini";
 import { supabase } from "@/services/supabase";
 import { Feather, FontAwesome, Ionicons } from "@expo/vector-icons";
@@ -8,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -31,6 +34,50 @@ const useFoodsQuery = () => {
     },
     staleTime: 1000 * 60 * 5,
   });
+};
+
+const useUserProfile = () => {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isLoadingUserId, setIsLoadingUserId] = useState(true);
+
+  // Get current user ID
+  useEffect(() => {
+    const fetchUserId = async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        setUserId(data?.user?.id || null);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+      } finally {
+        setIsLoadingUserId(false);
+      }
+    };
+
+    fetchUserId();
+  }, []);
+
+  // Fetch user profile data
+  const {
+    data: profileData,
+    isLoading: isLoadingProfile,
+    error: profileError,
+  } = useQuery({
+    queryKey: ["profile", userId],
+    queryFn: async () => {
+      if (!userId) throw new Error("No user id");
+      return getProfile(userId);
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  return {
+    userId,
+    profileData: profileData?.data,
+    isLoading: isLoadingUserId || isLoadingProfile,
+    error: profileError,
+  };
 };
 
 const runImagePipeline = async (
@@ -111,6 +158,10 @@ export default function HomeScreen() {
       : foodsData;
   }, [foodsData, searchQuery]);
 
+  // Get username or fallback to a default greeting
+  const username = profileData?.username || profileData?.full_name || "Chef";
+  const greeting = `Hi! ${username}`;
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" />
@@ -166,83 +217,93 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        <View className="px-6 mb-6">
-          <View className="flex-row items-center mb-4">
-            <Text className="text-2xl font-bold mr-2">Show your dishes</Text>
-            <Feather name="wifi" size={20} color="black" />
-          </View>
+        {/* Main content container with consistent padding */}
+        <View className="px-6">
+          {/* "Show your dishes" section */}
+          <View className="mb-6">
+            <View className="flex-row items-center mb-4">
+              <Text className="mr-2 text-2xl font-bold">Show your dishes</Text>
+              <Feather name="wifi" size={20} color="black" />
+            </View>
 
-          <View className="bg-white border border-gray-300 rounded-full mb-6 flex-row items-center px-4 py-3">
-            <TextInput
-              className="flex-1"
-              placeholder="Search..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            <View className="bg-[#ffd60a] p-2 rounded-full">
-              <Feather name="send" size={20} color="black" />
+            <View className="flex-row items-center px-4 py-3 mb-6 bg-white border border-gray-300 rounded-full">
+              <TextInput
+                className="flex-1"
+                placeholder="Search..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              <View className="bg-[#ffd60a] p-2 rounded-full">
+                <Feather name="send" size={20} color="black" />
+              </View>
             </View>
           </View>
 
-          <View className="flex-row justify-between">
-            <TouchableOpacity
-              className="bg-[#ffd60a] p-4 rounded-xl w-[48%]"
-              onPress={async () => {
-                const { status } =
-                  await ImagePicker.requestCameraPermissionsAsync();
-                if (status !== "granted") {
-                  Alert.alert(
-                    "Permission needed",
-                    "Please grant camera permissions."
+          {/* Upload feature section */}
+          <View className="mb-8">
+            <View className="flex-row justify-between">
+              <TouchableOpacity
+                className="bg-[#ffd60a] p-4 rounded-xl w-[48%]"
+                onPress={async () => {
+                  const { status } =
+                    await ImagePicker.requestCameraPermissionsAsync();
+                  if (status !== "granted") {
+                    Alert.alert(
+                      "Permission needed",
+                      "Please grant camera permissions."
+                    );
+                    return;
+                  }
+                  await handleImageSelection(ImagePicker.launchCameraAsync);
+                }}
+              >
+                <View className="items-center">
+                  <FontAwesome name="camera" size={24} color="black" />
+                  <Text className="mt-2 text-lg font-bold">From Camera</Text>
+                  <Text className="text-sm text-gray-700">
+                    Straight from Camera
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="bg-[#f9be25] p-4 rounded-xl w-[48%]"
+                onPress={async () => {
+                  const { status } =
+                    await ImagePicker.requestMediaLibraryPermissionsAsync();
+                  if (status !== "granted") {
+                    Alert.alert(
+                      "Permission needed",
+                      "Please grant gallery permissions."
+                    );
+                    return;
+                  }
+                  await handleImageSelection(
+                    ImagePicker.launchImageLibraryAsync
                   );
-                  return;
-                }
-                await handleImageSelection(ImagePicker.launchCameraAsync);
-              }}
-            >
-              <View className="items-center">
-                <FontAwesome name="camera" size={24} color="black" />
-                <Text className="text-lg font-bold mt-2">From Camera</Text>
-                <Text className="text-sm text-gray-700">
-                  Straight from Camera
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="bg-[#f9be25] p-4 rounded-xl w-[48%]"
-              onPress={async () => {
-                const { status } =
-                  await ImagePicker.requestMediaLibraryPermissionsAsync();
-                if (status !== "granted") {
-                  Alert.alert(
-                    "Permission needed",
-                    "Please grant gallery permissions."
-                  );
-                  return;
-                }
-                await handleImageSelection(ImagePicker.launchImageLibraryAsync);
-              }}
-            >
-              <View className="items-center">
-                <Feather name="image" size={24} color="black" />
-                <Text className="text-lg font-bold mt-2">From Gallery</Text>
-                <Text className="text-sm text-gray-700">
-                  Straight from Gallery
-                </Text>
-              </View>
-            </TouchableOpacity>
+                }}
+              >
+                <View className="items-center">
+                  <Feather name="image" size={24} color="black" />
+                  <Text className="mt-2 text-lg font-bold">From Gallery</Text>
+                  <Text className="text-sm text-gray-700">
+                    Straight from Gallery
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <View className="px-6 mb-6">
+          {/* Highlights section */}
+          <View className="mb-8">
             <View className="flex-row items-center mb-4">
-              <Text className="text-2xl font-bold mr-2">Highlights</Text>
+              <Text className="mr-2 text-2xl font-bold">Highlights</Text>
               <Ionicons name="star-outline" size={20} color="#bb0718" />
             </View>
-            {isLoading ? (
+            {isLoadingFoods ? (
               <Text className="text-center text-gray-500">
                 Loading highlights...
               </Text>
-            ) : error ? (
+            ) : foodsError ? (
               <Text className="text-center text-red-600">
                 Failed to load highlights
               </Text>
@@ -255,7 +316,7 @@ export default function HomeScreen() {
                 {filteredFoods.map((food, idx) => (
                   <TouchableOpacity
                     key={food.id}
-                    className="bg-white rounded-xl shadow-md flex-1 mr-4"
+                    className="flex-1 mr-4 bg-white shadow-sm rounded-xl"
                     style={{
                       marginRight: idx === filteredFoods.length - 1 ? 0 : 12,
                     }}
@@ -268,11 +329,11 @@ export default function HomeScreen() {
                         resizeMode="cover"
                       />
                     ) : (
-                      <View className="w-full h-32 rounded-t-xl bg-gray-200 items-center justify-center">
+                      <View className="items-center justify-center w-full h-32 bg-gray-200 rounded-t-xl">
                         <Text className="text-gray-400">No Image</Text>
                       </View>
                     )}
-                    <View className="flex-1 p-3 justify-between">
+                    <View className="justify-between flex-1 p-3">
                       <Text
                         className="text-base font-bold text-[#333] mb-1"
                         numberOfLines={1}
@@ -302,6 +363,7 @@ export default function HomeScreen() {
             )}
           </View>
         </View>
+
         {/* Extra space at bottom */}
         <View className="h-20"></View>
       </ScrollView>

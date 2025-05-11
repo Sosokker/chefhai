@@ -6,7 +6,7 @@ import { getBookmarkedPosts } from "@/services/data/bookmarks"
 import { getLikedPosts } from "@/services/data/likes"
 import { getProfile, updateProfile } from "@/services/data/profile"
 import { supabase } from "@/services/supabase"
-import { useIsFocused, useNavigation } from "@react-navigation/native"
+import { useIsFocused } from "@react-navigation/native"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import * as ImagePicker from "expo-image-picker"
 import { useEffect, useState } from "react"
@@ -23,6 +23,7 @@ import {
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import uuid from "react-native-uuid"
+import { router } from "expo-router"
 
 // Define the Food type based on your database structure
 type Food = {
@@ -44,7 +45,6 @@ export default function ProfileScreen() {
   const { isAuthenticated } = useAuth()
   const isFocused = useIsFocused()
   const queryClient = useQueryClient()
-  const navigation = useNavigation()
 
   const {
     data: userData,
@@ -125,10 +125,9 @@ export default function ProfileScreen() {
     staleTime: 1000 * 60, // 1 minute
   })
 
-  // Navigate to post detail
+  // Navigate to post detail using Expo Router instead of navigation API
   const handleFoodPress = (foodId: number) => {
-    // @ts-ignore - Navigation typing might be different in your app
-    navigation.navigate("post-detail", { id: foodId })
+    router.push(`/post-detail/${foodId}`)
   }
 
   // Refetch data when tab changes
@@ -237,7 +236,7 @@ export default function ProfileScreen() {
 
   if (isUserLoading) {
     return (
-      <SafeAreaView className="flex-1 justify-center items-center bg-white">
+      <SafeAreaView className="items-center justify-center flex-1 bg-white">
         <ActivityIndicator size="large" color="#bb0718" />
       </SafeAreaView>
     )
@@ -245,8 +244,8 @@ export default function ProfileScreen() {
 
   if (userError) {
     return (
-      <SafeAreaView className="flex-1 justify-center items-center bg-white px-4">
-        <Text className="text-red-600 font-bold text-center">{userError.message || "Failed to load user data."}</Text>
+      <SafeAreaView className="items-center justify-center flex-1 px-4 bg-white">
+        <Text className="font-bold text-center text-red-600">{userError.message || "Failed to load user data."}</Text>
       </SafeAreaView>
     )
   }
@@ -268,12 +267,12 @@ export default function ProfileScreen() {
           {isLoading ? (
             <ActivityIndicator size="small" color="#bb0718" />
           ) : error ? (
-            <Text className="text-red-600 font-bold mb-3">{error.message || error.toString()}</Text>
+            <Text className="mb-3 font-bold text-red-600">{error.message || error.toString()}</Text>
           ) : (
-            <Text className="text-xl font-bold mb-3">{profileData?.data?.username ?? "-"}</Text>
+            <Text className="mb-3 text-xl font-bold">{profileData?.data?.username ?? "-"}</Text>
           )}
           <TouchableOpacity
-            className="bg-red-600 py-2 px-10 rounded-lg"
+            className="px-10 py-2 bg-red-600 rounded-lg"
             onPress={() => {
               setEditUsername(profileData?.data?.username ?? "")
               setEditImage(profileData?.data?.avatar_url ?? null)
@@ -281,49 +280,49 @@ export default function ProfileScreen() {
               setModalVisible(true)
             }}
           >
-            <Text className="text-white font-bold">Edit</Text>
+            <Text className="font-bold text-white">Edit</Text>
           </TouchableOpacity>
 
           {/* Edit Modal */}
           <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
-            <View className="flex-1 justify-center items-center bg-black bg-opacity-40">
-              <View className="bg-white rounded-xl p-6 w-11/12 max-w-md shadow-lg">
-                <Text className="text-lg font-bold mb-4 text-center">Edit Profile</Text>
+            <View className="items-center justify-center flex-1 bg-gray-50 bg-opacity-40">
+              <View className="w-11/12 max-w-md p-6 bg-white shadow-md rounded-xl">
+                <Text className="mb-4 text-lg font-bold text-center">Edit Profile</Text>
 
                 <Pressable className="items-center mb-4" onPress={pickImage}>
                   <Image
                     source={editImage ? { uri: editImage } : require("@/assets/images/placeholder-food.jpg")}
-                    className="w-24 h-24 rounded-full mb-2 bg-gray-200"
+                    className="w-24 h-24 mb-2 bg-gray-200 rounded-full"
                   />
                   <Text className="text-blue-600 underline">Change Photo</Text>
                 </Pressable>
 
                 <Text className="mb-1 font-medium">Username</Text>
                 <TextInput
-                  className="border border-gray-300 rounded px-3 py-2 mb-4"
+                  className="px-3 py-2 mb-4 border border-gray-300 rounded"
                   value={editUsername}
                   onChangeText={setEditUsername}
                   placeholder="Enter new username"
                 />
-                {editError && <Text className="text-red-600 mb-2 text-center">{editError}</Text>}
+                {editError && <Text className="mb-2 text-center text-red-600">{editError}</Text>}
 
                 <View className="flex-row justify-between mt-2">
                   <TouchableOpacity
-                    className="bg-gray-300 py-2 px-6 rounded-lg"
+                    className="px-6 py-2 bg-gray-300 rounded-lg"
                     onPress={() => setModalVisible(false)}
                     disabled={editLoading}
                   >
-                    <Text className="text-gray-700 font-bold">Cancel</Text>
+                    <Text className="font-bold text-gray-700">Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    className="bg-red-600 py-2 px-6 rounded-lg"
+                    className="px-6 py-2 bg-red-600 rounded-lg"
                     onPress={handleSaveProfile}
                     disabled={editLoading}
                   >
                     {editLoading ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text className="text-white font-bold">Save</Text>
+                      <Text className="font-bold text-white">Save</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -347,23 +346,23 @@ export default function ProfileScreen() {
 
         {/* Tab Content */}
         {isActiveLoading ? (
-          <View className="flex-1 items-center justify-center py-8">
+          <View className="items-center justify-center flex-1 py-8">
             <ActivityIndicator size="small" color="#bb0718" />
           </View>
         ) : activeError ? (
-          <View className="flex-1 items-center justify-center py-8">
-            <Text className="text-red-600 font-bold text-center">{activeError.message || "Failed to load data"}</Text>
+          <View className="items-center justify-center flex-1 py-8">
+            <Text className="font-bold text-center text-red-600">{activeError.message || "Failed to load data"}</Text>
           </View>
         ) : !activeData?.data?.length ? (
-          <View className="flex-1 items-center justify-center py-8">
-            <Text className="text-gray-400 font-medium text-center">No items found</Text>
+          <View className="items-center justify-center flex-1 py-8">
+            <Text className="font-medium text-center text-gray-400">No items found</Text>
           </View>
         ) : (
           <View className="flex-row flex-wrap p-2">
             {activeData.data.map((item: Food) => (
               <TouchableOpacity
                 key={item.id}
-                className="w-1/2 p-2 relative"
+                className="relative w-1/2 p-2"
                 onPress={() => handleFoodPress(item.id)}
                 activeOpacity={0.7}
               >
@@ -371,7 +370,7 @@ export default function ProfileScreen() {
                   source={item.image_url ? { uri: item.image_url } : require("@/assets/images/placeholder-food.jpg")}
                   className="w-full h-[120px] rounded-lg"
                 />
-                <View className="absolute bottom-4 left-4 py-1 px-2 rounded bg-opacity-90 bg-white/80">
+                <View className="absolute px-2 py-1 rounded bottom-4 left-4 bg-opacity-90 bg-white/80">
                   <Text className="text-[#333] font-bold text-xs">{item.name}</Text>
                 </View>
               </TouchableOpacity>
