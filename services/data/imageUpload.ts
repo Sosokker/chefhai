@@ -29,6 +29,7 @@ export async function uploadImageToSupabase(imageBase64: string, imageType: stri
       transform: {
         width: 800,
         height: 600,
+        resize: "fill",
       }
     });
 
