@@ -28,7 +28,7 @@ const useFoodsQuery = () => {
   return useQuery({
     queryKey: ["highlight-foods"],
     queryFn: async () => {
-      const { data, error } = await getFoods(undefined, true, undefined, 4);
+      const { data, error } = await getFoods(undefined, true, undefined, 3);
       if (error) throw error;
       return data || [];
     },

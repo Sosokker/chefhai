@@ -18,13 +18,6 @@ export default function RootLayout() {
                 headerShown: false,
               }}
             />
-            <Stack.Screen
-              name="recipe-detail"
-              options={{
-                headerShown: false,
-                presentation: "card",
-              }}
-            />
           </Stack>
         </AuthProvider>
       </QueryClientProvider>

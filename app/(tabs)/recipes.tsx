@@ -1,99 +1,89 @@
-import { IconSymbol } from "@/components/ui/IconSymbol";
-import { Image } from "expo-image";
-import {
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+"use client";
+
+import RecipeHighlightCard from "@/components/RecipeHighlightCard";
+import { supabase } from "@/services/supabase";
+import { useQuery } from "@tanstack/react-query";
+import { router } from "expo-router";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+interface Recipe {
+  id: number;
+  name: string;
+  description: string;
+  image_url: string;
+  created_by: string;
+  is_shared: boolean;
+  time_to_cook_minutes?: number;
+}
+
 export default function RecipesScreen() {
-  const foodItems = [
-    {
-      id: 1,
-      name: "Padthaipro",
-      image: require("@/assets/images/food/padthai.jpg"),
-      color: "#FFCC00",
+  const {
+    data: allRecipes,
+    isLoading: isAllLoading,
+    error: allError,
+  } = useQuery<Recipe[], Error>({
+    queryKey: ["all-recipes"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("foods")
+        .select("*")
+        .eq("is_shared", true)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
     },
-    {
-      id: 2,
-      name: "Jjajangmyeon",
-      image: require("@/assets/images/food/jjajangmyeon.jpg"),
-      color: "#FFA500",
-    },
-    {
-      id: 3,
-      name: "Wingztab",
-      image: require("@/assets/images/food/wings.jpg"),
-      color: "#FFCC00",
-    },
-    {
-      id: 4,
-      name: "Ramen",
-      image: require("@/assets/images/food/ramen.jpg"),
-      color: "#FFA500",
-    },
-    {
-      id: 5,
-      name: "Tiramisu",
-      image: require("@/assets/images/food/tiramisu.jpg"),
-      color: "#FFCC00",
-    },
-    {
-      id: 6,
-      name: "Beef wellington",
-      image: require("@/assets/images/food/beef.jpg"),
-      color: "#FFA500",
-    },
-  ];
+    staleTime: 1000 * 60,
+  });
+
+  const recipes: Recipe[] = allRecipes || [];
+  const loading = isAllLoading;
+  const error = allError;
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-white items-center justify-center">
+        <ActivityIndicator size="large" color="#FFCC00" />
+      </SafeAreaView>
+    );
+  }
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-white items-center justify-center">
+        <Text className="text-lg text-red-600">Failed to load recipes</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+      <Text className="text-2xl font-bold text-[#bb0718] mx-4 mt-6 mb-4">
+        All Recipes
+      </Text>
       <ScrollView className="flex-1">
-        {/* Search Bar */}
-        <View className="flex-row items-center mx-4 mt-2 mb-4 px-3 h-10 bg-white rounded-full border border-gray-300">
-          <IconSymbol name="magnifyingglass" size={20} color="#FF0000" />
-          <TextInput
-            className="flex-1 ml-2 text-[#333]"
-            placeholder="Search"
-            placeholderTextColor="#FF0000"
-          />
-        </View>
-
-        {/* Filter Buttons */}
-        <View className="flex-row mx-4 mb-4">
-          <TouchableOpacity className="flex-1 bg-[#FFCC00] py-3 rounded-lg mr-2 items-center">
-            <Text className="font-bold text-[#333]">All Recipes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity className="flex-1 bg-red-600 py-3 rounded-lg items-center">
-            <Text className="font-bold text-white">My Recipes</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Divider */}
-        <View className="h-px bg-[#EEEEEE] mx-4 mb-4" />
-
-        {/* Food Grid */}
-        <View className="flex-row flex-wrap p-2">
-          {foodItems.map((item) => (
-            <View key={item.id} className="w-1/2 p-2 relative">
-              <Image
-                source={item.image}
-                className="w-full h-[120px] rounded-lg"
-                resizeMode="cover"
-              />
-              <View
-                className="absolute bottom-4 left-4 py-1 px-2 rounded bg-opacity-90"
-                style={{ backgroundColor: item.color }}
-              >
-                <Text className="text-[#333] font-bold text-xs">
-                  {item.name}
-                </Text>
-              </View>
+        <View className="flex-row flex-wrap px-2 pb-8">
+          {recipes.length === 0 ? (
+            <View className="w-full items-center mt-10">
+              <Text className="text-gray-500">No recipes found.</Text>
             </View>
-          ))}
+          ) : (
+            recipes.map((item, idx) => (
+              <View key={item.id} className="w-1/2 p-2">
+                <RecipeHighlightCard
+                  recipe={{
+                    id: item.id,
+                    name: item.name,
+                    description: item.description,
+                    image_url: item.image_url,
+                    time_to_cook_minutes: item.time_to_cook_minutes,
+                  }}
+                  onPress={() => {
+                    router.push(`/food/${item.id}`);
+                  }}
+                />
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
