@@ -504,7 +504,7 @@ export default function PostDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
       {/* Fixed Header */}
-          <View className="flex-row justify-between items-center px-4 py-3 mt-11">
+          <View className="flex-row items-center justify-between px-4 py-3 mt-11">
             <TouchableOpacity 
               className="bg-[#ffd60a] p-3 rounded-lg"
               onPress={() => router.back()}
@@ -716,9 +716,6 @@ export default function PostDetailScreen() {
                         </Text>
                       </View>
                     </View>
-
-                    {/* Separator */}
-                    <View style={{ height: 1, backgroundColor: "#e0e0e0", marginTop: 16 }} />
                   </View>
                 ))
               ) : (
