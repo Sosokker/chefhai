@@ -1,454 +1,419 @@
 "use client";
 
 import { IconSymbol } from "@/components/ui/IconSymbol";
+import {
+  getFoodById,
+  getIngredients,
+  getNutrients,
+} from "@/services/data/foods";
+import { supabase } from "@/services/supabase";
+import { Foods } from "@/types";
+import { Ingredient, Nutrient } from "@/types/index";
+import { Feather } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+interface Step {
+  id: string;
+  food_id: string;
+  title: string;
+  step_order: number;
+  description: string;
+  created_at: string;
+}
+
 export default function FoodDetailScreen() {
   const { id } = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState("Ingredients");
 
-  // Mock data - in a real app, you would fetch this based on the ID
-  const foodData = {
-    id: 1,
-    name: "Pad Kra Pao Moo Sab with Eggs",
-    image: require("@/assets/images/food/padkrapao.jpg"),
-    description:
-      "Pad kra pao, also written as pad gaprao, is a popular Thai stir-fry of ground meat and holy basil.",
-    time: "30 Mins",
-    skills: "Easy",
-    ingredients: [
-      { name: "Ground pork", emoji: "🥩" },
-      { name: "Holy basil", emoji: "🌿" },
-      { name: "Garlic", emoji: "🧄" },
-      { name: "Thai chili", emoji: "🌶️" },
-      { name: "Soy sauce", emoji: "🍶" },
-      { name: "Oyster sauce", emoji: "🦪" },
-      { name: "Sugar", emoji: "🧂" },
-      { name: "Eggs", emoji: "🥚" },
-    ],
-    calories: "520 kcal",
-    nutrition: {
-      fat: 15,
-      fiber: 3,
-      protein: 25,
-      carbs: 40,
+  const foodId = typeof id === "string" ? id : "";
+
+  const {
+    data: foodData,
+    isLoading,
+    error,
+  } = useQuery<Foods, Error>({
+    queryKey: ["food-detail", foodId],
+    queryFn: async () => {
+      const { data, error } = await getFoodById(foodId);
+      if (error) throw error;
+      if (!data) throw new Error("Food not found");
+      return data;
     },
-    steps: [
-      "Gather and prepare all ingredients",
-      "Heat oil in a wok or large frying pan",
-      "Fry the eggs sunny side up and set aside",
-      "Stir-fry garlic and chilies until fragrant",
-      "Add ground pork and cook until browned",
-      "Add sauces and basil, serve with rice and egg on top",
-    ],
-  };
+    enabled: !!foodId,
+  });
+
+  const {
+    data: nutrients,
+    isLoading: nutrientsLoading,
+    error: nutrientsError,
+  } = useQuery<Nutrient | null, Error>({
+    queryKey: ["food-nutrients", foodId],
+    queryFn: async () => {
+      const { data, error } = await getNutrients(foodId);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!foodId && !!foodData,
+  });
+
+  const {
+    data: ingredients,
+    error: ingredientsError,
+    isLoading: ingredientsLoading,
+  } = useQuery<Ingredient[], Error>({
+    queryKey: ["food-ingredients", foodId],
+    queryFn: async () => {
+      const { data, error } = await getIngredients(foodId);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!foodId && !!foodData,
+  });
+
+  const {
+    data: steps,
+    isLoading: stepsLoading,
+    error: stepsError,
+  } = useQuery<Step[], Error>({
+    queryKey: ["food-steps", foodId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cooking_steps")
+        .select(
+          `
+          id,
+          food_id,
+          title,
+          step_order,
+          description,
+          created_at
+          `
+        )
+        .eq("food_id", foodId)
+        .order("step_order", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!foodId && !!foodData,
+  });
+
+  if (isLoading || stepsLoading || nutrientsLoading || ingredientsLoading) {
+    return (
+      <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+        <View className="flex-1 justify-center items-center">
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !foodData || ingredientsError || stepsError || nutrientsError) {
+    return (
+      <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+        <View className="flex-1 justify-center items-center">
+          <Text>Error loading food details</Text>
+          <TouchableOpacity
+            className="px-4 py-2 bg-yellow-400 rounded-full mt-4"
+            onPress={() => router.push("/home")}
+          >
+            <Text className="text-lg font-bold text-white">
+              Go back to home page
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const startCookingSession = () => {
-    router.push(`/cooking/[id]`);
+    // Corrected router push to use the actual foodId
+    router.push(`/cooking/${foodId}`);
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView style={styles.scrollView}>
-        {/* Header with back and share buttons */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <IconSymbol name="chevron.left" size={24} color="#333333" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.shareButton}>
-            <IconSymbol name="square.and.arrow.up" size={24} color="#FFCC00" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Food Image */}
-        <View style={styles.imageContainer}>
-          <Image
-            source={foodData.image}
-            style={styles.foodImage}
-            contentFit="cover"
-          />
-        </View>
-
-        {/* Food Title and Description */}
-        <View style={styles.contentContainer}>
-          <Text style={styles.foodTitle}>{foodData.name}</Text>
-          <Text style={styles.foodDescription}>{foodData.description}</Text>
-
-          {/* Info Tabs */}
-          <View style={styles.tabsContainer}>
+    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+        <ScrollView className="flex-1">
+          {/* Header with back and share buttons */}
+          <View className="flex-row justify-between px-4 py-3 absolute top-0 left-0 right-0 z-10">
             <TouchableOpacity
-              style={styles.tabItem}
-              onPress={() => setActiveTab("Skills")}
+              className="bg-[#ffd60a] p-3 rounded-lg"
+              onPress={() => router.back()}
             >
-              <Text style={styles.tabLabel}>Skills</Text>
-              <Text style={styles.tabValue}>{foodData.skills}</Text>
+              <Feather name="arrow-left" size={24} color="#bb0718" />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tabItem}
-              onPress={() => setActiveTab("Time")}
-            >
-              <Text style={styles.tabLabel}>Time</Text>
-              <Text style={styles.tabValue}>{foodData.time}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.tabItem,
-                activeTab === "Ingredients" && styles.activeTabItem,
-              ]}
-              onPress={() => setActiveTab("Ingredients")}
-            >
-              <Text style={styles.tabLabel}>Ingredients</Text>
-              <Text style={styles.tabValue}>{foodData.ingredients.length}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tabItem}
-              onPress={() => setActiveTab("Calories")}
-            >
-              <Text style={styles.tabLabel}>Calories</Text>
-              <Text style={styles.tabValue}>{foodData.calories}</Text>
+            <TouchableOpacity className="w-10 h-10 rounded-full bg-white justify-center items-center">
+              <IconSymbol
+                name="square.and.arrow.up"
+                size={24}
+                color="#FFCC00"
+              />
             </TouchableOpacity>
           </View>
 
-          {/* Ingredients Section */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Ingredients</Text>
-            <View style={styles.ingredientsGrid}>
-              {foodData.ingredients.map((ingredient, index) => (
-                <View key={index} style={styles.ingredientItem}>
-                  <View style={styles.ingredientIconContainer}>
-                    <Text style={styles.ingredientEmoji}>
-                      {ingredient.emoji}
+          {/* Food Image */}
+          <View className="items-center mt-16 mb-5">
+            <View
+              style={{
+                width: 200,
+                height: 200,
+                backgroundColor: "#e0e0e0",
+                borderRadius: 24,
+                overflow: "hidden",
+              }}
+            >
+              {foodData.image_url ? (
+                <Image
+                  source={{ uri: foodData.image_url }}
+                  className="w-52 h-52 rounded-full border-4 border-white"
+                  style={{ width: "100%", height: "100%" }}
+                />
+              ) : (
+                <Text className="text-lg font-bold text-gray-500">
+                  Image not available
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Food Title and Description */}
+          <View className="px-4">
+            <Text className="text-2xl font-bold text-gray-800 mb-2">
+              {foodData.name}
+            </Text>
+            <Text className="text-base text-gray-500 mb-5 leading-6">
+              {foodData.description}
+            </Text>
+
+            {/* Info Tabs */}
+            <View className="flex-row justify-between mb-5">
+              <TouchableOpacity
+                className="items-center"
+                onPress={() => setActiveTab("Skills")}
+              >
+                <Text className="text-sm text-gray-500">Skills</Text>
+                <Text className="text-base font-bold text-gray-800 mt-1">
+                  {foodData.skill_level}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="items-center"
+                onPress={() => setActiveTab("Time")}
+              >
+                <Text className="text-sm text-gray-500">Time</Text>
+                <Text className="text-base font-bold text-gray-800 mt-1">
+                  {foodData.time_to_cook_minutes}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`items-center ${
+                  activeTab === "Ingredients"
+                    ? "border-b-2 border-gray-800"
+                    : ""
+                }`}
+                onPress={() => setActiveTab("Ingredients")}
+              >
+                <Text className="text-sm text-gray-500">Ingredients</Text>
+                <Text className="text-base font-bold text-gray-800 mt-1">
+                  {/* Use ingredient_count from foodData or length of the fetched ingredients array */}
+                  {foodData.ingredient_count ?? ingredients?.length ?? 0}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="items-center"
+                onPress={() => setActiveTab("Calories")}
+              >
+                <Text className="text-sm text-gray-500">Calories</Text>
+                <Text className="text-base font-bold text-gray-800 mt-1">
+                  {foodData.calories}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Ingredients Section */}
+            <View className="mb-5">
+              <Text className="text-xl font-bold text-gray-800 mb-4">
+                Ingredients
+              </Text>
+              <View className="flex-row flex-wrap">
+                {(ingredients ?? []).map(
+                  // Use the 'ingredients' state variable
+                  (
+                    ingredient: Ingredient,
+                    index: number // Added type for ingredient
+                  ) => (
+                    <View
+                      key={ingredient.id || index}
+                      className="w-1/4 items-center mb-4"
+                    >
+                      <View className="w-15 h-15 rounded-full bg-gray-100 justify-center items-center mb-2 shadow">
+                        <Text className="text-2xl">{ingredient.emoji}</Text>
+                      </View>
+                      <Text className="text-xs text-center text-gray-800">
+                        {ingredient.name}
+                      </Text>
+                    </View>
+                  )
+                )}
+                {/* You might want to show a loading/empty state for ingredients here too */}
+                {/*!ingredientsLoading && ingredients?.length === 0 && (
+                <Text className="text-sm text-gray-500">No ingredients listed.</Text>
+              )*/}
+              </View>
+            </View>
+
+            {/* Nutrition Section - Improved UI */}
+            <View className="mb-5">
+              <Text className="text-xl font-bold text-gray-800 mb-4">
+                Nutrition Facts
+              </Text>
+              {/* Conditionally render nutrients or show placeholder/loading */}
+              {nutrients ? (
+                <View className="flex-row justify-between bg-white rounded-xl p-4 shadow">
+                  <View className="items-center">
+                    <View
+                      className="w-15 h-15 rounded-full justify-center items-center mb-2"
+                      style={{ backgroundColor: "#FFD700" }}
+                    >
+                      <Text className="text-lg font-bold text-gray-800">
+                        {nutrients.fat_g ?? 0}
+                      </Text>
+                      <Text className="text-xs text-gray-800 absolute bottom-2.5 right-2.5">
+                        g
+                      </Text>
+                    </View>
+                    <Text className="text-sm font-medium text-gray-800">
+                      Fat
                     </Text>
                   </View>
-                  <Text style={styles.ingredientName}>{ingredient.name}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Nutrition Section - Improved UI */}
-          <View style={styles.nutritionSection}>
-            <Text style={styles.sectionTitle}>Nutrition Facts</Text>
-            <View style={styles.nutritionContainer}>
-              <View style={styles.nutritionItem}>
-                <View
-                  style={[
-                    styles.nutritionCircle,
-                    { backgroundColor: "#FFD700" },
-                  ]}
-                >
-                  <Text style={styles.nutritionValue}>
-                    {foodData.nutrition.fat}
-                  </Text>
-                  <Text style={styles.nutritionUnit}>g</Text>
-                </View>
-                <Text style={styles.nutritionLabel}>Fat</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <View
-                  style={[
-                    styles.nutritionCircle,
-                    { backgroundColor: "#90EE90" },
-                  ]}
-                >
-                  <Text style={styles.nutritionValue}>
-                    {foodData.nutrition.fiber}
-                  </Text>
-                  <Text style={styles.nutritionUnit}>g</Text>
-                </View>
-                <Text style={styles.nutritionLabel}>Fiber</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <View
-                  style={[
-                    styles.nutritionCircle,
-                    { backgroundColor: "#ADD8E6" },
-                  ]}
-                >
-                  <Text style={styles.nutritionValue}>
-                    {foodData.nutrition.protein}
-                  </Text>
-                  <Text style={styles.nutritionUnit}>g</Text>
-                </View>
-                <Text style={styles.nutritionLabel}>Protein</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <View
-                  style={[
-                    styles.nutritionCircle,
-                    { backgroundColor: "#FFA07A" },
-                  ]}
-                >
-                  <Text style={styles.nutritionValue}>
-                    {foodData.nutrition.carbs}
-                  </Text>
-                  <Text style={styles.nutritionUnit}>g</Text>
-                </View>
-                <Text style={styles.nutritionLabel}>Carbs</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Steps Preview */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Cooking Steps</Text>
-            <View style={styles.stepsPreviewContainer}>
-              {foodData.steps.slice(0, 2).map((step, index) => (
-                <View key={index} style={styles.stepPreviewItem}>
-                  <View style={styles.stepNumberCircle}>
-                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                  <View className="items-center">
+                    <View
+                      className="w-15 h-15 rounded-full justify-center items-center mb-2"
+                      style={{ backgroundColor: "#90EE90" }}
+                    >
+                      <Text className="text-lg font-bold text-gray-800">
+                        {nutrients.fiber_g ?? 0}
+                      </Text>
+                      <Text className="text-xs text-gray-800 absolute bottom-2.5 right-2.5">
+                        g
+                      </Text>
+                    </View>
+                    <Text className="text-sm font-medium text-gray-800">
+                      Fiber
+                    </Text>
                   </View>
-                  <Text style={styles.stepPreviewText}>{step}</Text>
+                  <View className="items-center">
+                    <View
+                      className="w-15 h-15 rounded-full justify-center items-center mb-2"
+                      style={{ backgroundColor: "#ADD8E6" }}
+                    >
+                      <Text className="text-lg font-bold text-gray-800">
+                        {nutrients.protein_g ?? 0}
+                      </Text>
+                      <Text className="text-xs text-gray-800 absolute bottom-2.5 right-2.5">
+                        g
+                      </Text>
+                    </View>
+                    <Text className="text-sm font-medium text-gray-800">
+                      Protein
+                    </Text>
+                  </View>
+                  <View className="items-center">
+                    <View
+                      className="w-15 h-15 rounded-full justify-center items-center mb-2"
+                      style={{ backgroundColor: "#FFA07A" }}
+                    >
+                      <Text className="text-lg font-bold text-gray-800">
+                        {nutrients.carbs_g ?? 0}
+                      </Text>
+                      <Text className="text-xs text-gray-800 absolute bottom-2.5 right-2.5">
+                        g
+                      </Text>
+                    </View>
+                    <Text className="text-sm font-medium text-gray-800">
+                      Carbs
+                    </Text>
+                  </View>
                 </View>
-              ))}
-              <Text style={styles.moreStepsText}>
-                ...and {foodData.steps.length - 2} more steps
+              ) : (
+                <Text className="text-sm text-gray-500">
+                  Nutrition facts not available.
+                </Text>
+              )}
+            </View>
+
+            {/* Steps Preview */}
+            <View className="mb-5">
+              <Text className="text-xl font-bold text-gray-800 mb-4">
+                Cooking Steps
               </Text>
+              <View className="bg-gray-100 rounded-xl p-4">
+                {steps && steps.length > 0 ? (
+                  steps.slice(0, 2).map(
+                    (
+                      step: Step,
+                      index: number // Added type for step
+                    ) => (
+                      <View
+                        key={step.id || index}
+                        className="flex-row items-center mb-3"
+                      >
+                        <View className="w-7.5 h-7.5 rounded-full bg-yellow-400 justify-center items-center mr-3">
+                          <Text className="text-base font-bold text-gray-800">
+                            {step.step_order ?? index + 1}{" "}
+                            {/* Use step_order or fallback to index */}
+                          </Text>
+                        </View>
+                        <Text className="text-base text-gray-800 flex-1">
+                          {step.description || step.title}{" "}
+                          {/* Display description or title */}
+                        </Text>
+                      </View>
+                    )
+                  )
+                ) : (
+                  <Text className="text-sm text-gray-500 italic text-center mt-2">
+                    No cooking steps listed
+                  </Text>
+                )}
+                {steps && steps.length > 2 && (
+                  <Text className="text-sm text-gray-500 italic text-center mt-2">
+                    ...and {steps.length - 2} more steps
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
 
-      {/* Cook Button */}
-      <TouchableOpacity style={styles.cookButton} onPress={startCookingSession}>
-        <Text style={styles.cookButtonText}>Let&apos;s Cook!</Text>
-        <IconSymbol name="fork.knife" size={20} color="#FFCC00" />
-      </TouchableOpacity>
+        {/* Cook Button */}
+        <TouchableOpacity
+          className="absolute bottom-0 left-0 right-0 bg-red-600 flex-row justify-center items-center py-4"
+          onPress={startCookingSession}
+          // Disable button if essential data is missing or still loading
+          // disabled={isLoading || ingredientsLoading || stepsLoading || !ingredients || !steps}
+        >
+          <Text className="text-lg font-bold text-yellow-400 mr-2">
+            Let&apos;s Cook!
+          </Text>
+          <IconSymbol name="fork.knife" size={20} color="#FFCC00" />
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FFCC00",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  shareButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  imageContainer: {
-    alignItems: "center",
-    marginTop: 60,
-    marginBottom: 20,
-  },
-  foodImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 5,
-    borderColor: "#FFFFFF",
-  },
-  contentContainer: {
-    paddingHorizontal: 16,
-  },
-  foodTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333333",
-    marginBottom: 8,
-  },
-  foodDescription: {
-    fontSize: 16,
-    color: "#666666",
-    marginBottom: 20,
-    lineHeight: 22,
-  },
-  tabsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  tabItem: {
-    alignItems: "center",
-  },
-  activeTabItem: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#333333",
-  },
-  tabLabel: {
-    fontSize: 14,
-    color: "#666666",
-  },
-  tabValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333333",
-    marginTop: 4,
-  },
-  sectionContainer: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333333",
-    marginBottom: 16,
-  },
-  ingredientsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  ingredientItem: {
-    width: "25%",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  ingredientIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#F8F8F8",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  ingredientEmoji: {
-    fontSize: 30,
-  },
-  ingredientName: {
-    fontSize: 12,
-    textAlign: "center",
-    color: "#333333",
-  },
-  nutritionSection: {
-    marginBottom: 20,
-  },
-  nutritionContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  nutritionItem: {
-    alignItems: "center",
-  },
-  nutritionCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  nutritionValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333333",
-  },
-  nutritionUnit: {
-    fontSize: 12,
-    color: "#333333",
-    position: "absolute",
-    bottom: 10,
-    right: 10,
-  },
-  nutritionLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#333333",
-  },
-  stepsPreviewContainer: {
-    backgroundColor: "#F8F8F8",
-    borderRadius: 12,
-    padding: 16,
-  },
-  stepPreviewItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  stepNumberCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#FFCC00",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  stepNumber: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333333",
-  },
-  stepPreviewText: {
-    fontSize: 16,
-    color: "#333333",
-    flex: 1,
-  },
-  moreStepsText: {
-    fontSize: 14,
-    color: "#666666",
-    fontStyle: "italic",
-    textAlign: "center",
-    marginTop: 8,
-  },
-  cookButton: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#FF0000",
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 16,
-  },
-  cookButtonText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#FFCC00",
-    marginRight: 8,
-  },
-});

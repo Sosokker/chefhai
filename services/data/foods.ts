@@ -46,6 +46,19 @@ export const getFoods = async (
 };
 
 /**
+ * Retrieves a list of foods based on the provided filters.
+ */
+export const getFoodById = async (foodId: string): Promise<{ data: Foods | null; error: PostgrestError | null }> => {
+  const { data, error } = await supabase.from("foods")
+    .select(
+      `id, name, description, time_to_cook_minutes, skill_level, ingredient_count, calories, image_url, is_shared, created_by, created_at`
+    )
+    .eq("id", foodId)
+    .single();
+  return { data, error };
+}
+
+/**
  * Retrieves a list of saved foods for a specific user.
  * 
  * @param userId - The ID of the user to retrieve saved foods for.
@@ -97,8 +110,9 @@ export const getNutrients = async (food_id: string): Promise<{ data: Nutrient | 
       created_at
       `)
   .eq("food_id", food_id)
-  .single()
-  return { data, error };
+  .limit(1)
+  
+  return { data: data?.[0] || null, error };
 }
 
 interface Ingredient {

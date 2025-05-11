@@ -105,7 +105,7 @@ const processImage = async (
 };
 
 const navigateToFoodDetail = (foodId: string) => {
-  router.push({ pathname: "/recipe-detail", params: { id: foodId } });
+  router.push({ pathname: "/food/[id]", params: { id: foodId } });
 };
 
 export default function HomeScreen() {
@@ -147,11 +147,7 @@ export default function HomeScreen() {
         setImageProcessing(false);
       }
       router.push({
-        pathname: "/recipe-detail",
-        params: {
-          title: "My New Recipe",
-          image: result.assets[0].uri,
-        },
+        pathname: "/profile",
       });
     }
   };

@@ -1,67 +1,77 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useRef } from "react"
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
-  FlatList,
   Alert,
-  TextInput,
+  FlatList,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
-} from "react-native"
-import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
-import { useLocalSearchParams, router } from "expo-router"
-import { useAuth } from "../../context/auth-context"
-import { supabase } from "../../services/supabase"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useAuth } from "../../context/auth-context";
 import {
-  getComments,
-  createComment,
-  getLikesCount,
-  getSavesCount,
-  getCommentsCount,
+  queryKeys,
+  useLikeMutation,
+  useSaveMutation,
+} from "../../hooks/use-foods";
+import {
   checkUserLiked,
   checkUserSaved,
-} from "../../services/data/forum"
-import { getProfile } from "../../services/data/profile"
-import { queryKeys, useLikeMutation, useSaveMutation } from "../../hooks/use-foods"
+  createComment,
+  getComments,
+  getCommentsCount,
+  getLikesCount,
+  getSavesCount,
+} from "../../services/data/forum";
+import { getProfile } from "../../services/data/profile";
+import { supabase } from "../../services/supabase";
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams()
-  const foodId = typeof params.id === "string" ? params.id : ""
-  const queryClient = useQueryClient()
-  const scrollViewRef = useRef<ScrollView>(null)
+  const params = useLocalSearchParams();
+  const foodId = typeof params.id === "string" ? params.id : "";
+  const queryClient = useQueryClient();
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  console.log("Post detail screen - Food ID:", foodId)
+  console.log("Post detail screen - Food ID:", foodId);
 
-  const { isAuthenticated } = useAuth()
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [commentText, setCommentText] = useState("")
-  const [submittingComment, setSubmittingComment] = useState(false)
-  const [showReviews, setShowReviews] = useState(true)
-  const [keyboardVisible, setKeyboardVisible] = useState(false)
+  const { isAuthenticated } = useAuth();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [showReviews, setShowReviews] = useState(true);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   // Listen for keyboard events
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener("keyboardDidShow", () => {
-      setKeyboardVisible(true)
-    })
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
 
-    const keyboardDidHideListener = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false)
-    })
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
 
     return () => {
-      keyboardDidShowListener.remove()
-      keyboardDidHideListener.remove()
-    }
-  }, [])
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   // Recipe info cards data
   const recipeInfoCards = [
@@ -69,12 +79,15 @@ export default function PostDetailScreen() {
       id: "cooking_time",
       title: "Cooking Time",
       icon: (
-        <View style={{ backgroundColor: "#ffd60a", padding: 8, borderRadius: 16 }}>
+        <View
+          style={{ backgroundColor: "#ffd60a", padding: 8, borderRadius: 16 }}
+        >
           <Feather name="clock" size={18} color="#bb0718" />
         </View>
       ),
       value: (food: any) => food.time_to_cook_minutes,
-      unit: (food: any) => (food.time_to_cook_minutes === 1 ? "minute" : "minutes"),
+      unit: (food: any) =>
+        food.time_to_cook_minutes === 1 ? "minute" : "minutes",
       gradient: ["#fff8e1", "#fffde7"],
       valueColor: "#bb0718",
     },
@@ -82,7 +95,9 @@ export default function PostDetailScreen() {
       id: "skill_level",
       title: "Skill Level",
       icon: (
-        <View style={{ backgroundColor: "#4CAF50", padding: 8, borderRadius: 16 }}>
+        <View
+          style={{ backgroundColor: "#4CAF50", padding: 8, borderRadius: 16 }}
+        >
           <MaterialCommunityIcons name="chef-hat" size={18} color="white" />
         </View>
       ),
@@ -92,7 +107,13 @@ export default function PostDetailScreen() {
       valueColor: "",
       customContent: (food: any) => (
         <View>
-          <Text style={{ fontSize: 20, fontWeight: "bold", color: getSkillLevelColor(food.skill_level) }}>
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "bold",
+              color: getSkillLevelColor(food.skill_level),
+            }}
+          >
             {food.skill_level}
           </Text>
           {renderSkillLevelDots(food.skill_level)}
@@ -103,7 +124,9 @@ export default function PostDetailScreen() {
       id: "ingredients",
       title: "Ingredients",
       icon: (
-        <View style={{ backgroundColor: "#2196F3", padding: 8, borderRadius: 16 }}>
+        <View
+          style={{ backgroundColor: "#2196F3", padding: 8, borderRadius: 16 }}
+        >
           <Feather name="list" size={18} color="white" />
         </View>
       ),
@@ -116,7 +139,9 @@ export default function PostDetailScreen() {
       id: "calories",
       title: "Calories",
       icon: (
-        <View style={{ backgroundColor: "#F44336", padding: 8, borderRadius: 16 }}>
+        <View
+          style={{ backgroundColor: "#F44336", padding: 8, borderRadius: 16 }}
+        >
           <Ionicons name="flame" size={18} color="white" />
         </View>
       ),
@@ -125,23 +150,23 @@ export default function PostDetailScreen() {
       gradient: ["#ffebee", "#fff8e1"],
       valueColor: "#F44336",
     },
-  ]
+  ];
 
   // Get current user ID from Supabase session
   useEffect(() => {
     async function getCurrentUser() {
       if (isAuthenticated) {
-        const { data } = await supabase.auth.getSession()
-        const userId = data.session?.user?.id
-        console.log("Current user ID:", userId)
-        setCurrentUserId(userId || null)
+        const { data } = await supabase.auth.getSession();
+        const userId = data.session?.user?.id;
+        console.log("Current user ID:", userId);
+        setCurrentUserId(userId || null);
       } else {
-        setCurrentUserId(null)
+        setCurrentUserId(null);
       }
     }
 
-    getCurrentUser()
-  }, [isAuthenticated])
+    getCurrentUser();
+  }, [isAuthenticated]);
 
   // Fetch food details
   const {
@@ -151,9 +176,13 @@ export default function PostDetailScreen() {
   } = useQuery({
     queryKey: queryKeys.foodDetails(foodId),
     queryFn: async () => {
-      const { data, error } = await supabase.from("foods").select("*").eq("id", foodId).single()
+      const { data, error } = await supabase
+        .from("foods")
+        .select("*")
+        .eq("id", foodId)
+        .single();
 
-      if (error) throw error
+      if (error) throw error;
 
       return {
         ...data,
@@ -163,25 +192,25 @@ export default function PostDetailScreen() {
         time_to_cook_minutes: data.time_to_cook_minutes ?? 0,
         skill_level: data.skill_level || "Easy",
         image_url: data.image_url || "",
-      }
+      };
     },
     enabled: !!foodId,
-  })
+  });
 
   // Fetch food creator
   const { data: foodCreator, isLoading: isLoadingCreator } = useQuery({
     queryKey: ["food-creator", food?.created_by],
     queryFn: async () => {
-      if (!food?.created_by) return null
+      if (!food?.created_by) return null;
 
-      const { data, error } = await getProfile(food.created_by)
+      const { data, error } = await getProfile(food.created_by);
 
-      if (error) throw error
+      if (error) throw error;
 
-      return data
+      return data;
     },
     enabled: !!food?.created_by,
-  })
+  });
 
   // Fetch food stats
   const {
@@ -195,16 +224,16 @@ export default function PostDetailScreen() {
         getLikesCount(foodId),
         getSavesCount(foodId),
         getCommentsCount(foodId),
-      ])
+      ]);
 
       return {
         likes: likesRes.count || 0,
         saves: savesRes.count || 0,
         comments: commentsRes.count || 0,
-      }
+      };
     },
     enabled: !!foodId,
-  })
+  });
 
   // Fetch user interactions
   const {
@@ -214,20 +243,20 @@ export default function PostDetailScreen() {
   } = useQuery({
     queryKey: ["user-interactions", foodId, currentUserId],
     queryFn: async () => {
-      if (!currentUserId) return { liked: false, saved: false }
+      if (!currentUserId) return { liked: false, saved: false };
 
       const [likedRes, savedRes] = await Promise.all([
         checkUserLiked(foodId, currentUserId),
         checkUserSaved(foodId, currentUserId),
-      ])
+      ]);
 
       return {
         liked: !!likedRes.data,
         saved: !!savedRes.data,
-      }
+      };
     },
     enabled: !!foodId && !!currentUserId,
-  })
+  });
 
   // Fetch comments
   const {
@@ -237,36 +266,48 @@ export default function PostDetailScreen() {
   } = useQuery({
     queryKey: queryKeys.foodComments(foodId),
     queryFn: async () => {
-      const { data, error } = await getComments(foodId)
+      const { data, error } = await getComments(foodId);
 
-      if (error) throw error
+      if (error) throw error;
 
-      return data || []
+      return data || [];
     },
     enabled: !!foodId,
-  })
+  });
 
   // Set up mutations
-  const likeMutation = useLikeMutation()
-  const saveMutation = useSaveMutation()
+  const likeMutation = useLikeMutation();
+  const saveMutation = useSaveMutation();
 
   const commentMutation = useMutation({
-    mutationFn: async ({ foodId, userId, content }: { foodId: string; userId: string; content: string }) => {
-      return createComment(foodId, userId, content)
+    mutationFn: async ({
+      foodId,
+      userId,
+      content,
+    }: {
+      foodId: string;
+      userId: string;
+      content: string;
+    }) => {
+      return createComment(foodId, userId, content);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.foodComments(foodId) })
-      queryClient.invalidateQueries({ queryKey: ["food-stats", foodId] })
-      setCommentText("")
-      Keyboard.dismiss()
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.foodComments(foodId),
+      });
+      queryClient.invalidateQueries({ queryKey: ["food-stats", foodId] });
+      setCommentText("");
+      Keyboard.dismiss();
     },
-  })
+  });
 
   // Set up real-time subscription for comments
   useEffect(() => {
-    if (!foodId) return
+    if (!foodId) return;
 
-    console.log(`Setting up real-time subscription for comments on food_id: ${foodId}`)
+    console.log(
+      `Setting up real-time subscription for comments on food_id: ${foodId}`
+    );
 
     const subscription = supabase
       .channel(`food_comments:${foodId}`)
@@ -279,21 +320,21 @@ export default function PostDetailScreen() {
           filter: `food_id=eq.${foodId}`,
         },
         () => {
-          console.log("Comment change detected, refreshing comments")
-          refetchComments()
-          refetchStats()
-        },
+          console.log("Comment change detected, refreshing comments");
+          refetchComments();
+          refetchStats();
+        }
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(subscription)
-    }
-  }, [foodId, refetchComments, refetchStats])
+      supabase.removeChannel(subscription);
+    };
+  }, [foodId, refetchComments, refetchStats]);
 
   // Set up real-time subscription for likes and saves
   useEffect(() => {
-    if (!foodId) return
+    if (!foodId) return;
 
     const likesSubscription = supabase
       .channel(`food_likes:${foodId}`)
@@ -306,12 +347,14 @@ export default function PostDetailScreen() {
           filter: `food_id=eq.${foodId}`,
         },
         () => {
-          console.log("Like change detected, refreshing stats and interactions")
-          refetchStats()
-          refetchInteractions()
-        },
+          console.log(
+            "Like change detected, refreshing stats and interactions"
+          );
+          refetchStats();
+          refetchInteractions();
+        }
       )
-      .subscribe()
+      .subscribe();
 
     const savesSubscription = supabase
       .channel(`food_saves:${foodId}`)
@@ -324,23 +367,25 @@ export default function PostDetailScreen() {
           filter: `food_id=eq.${foodId}`,
         },
         () => {
-          console.log("Save change detected, refreshing stats and interactions")
-          refetchStats()
-          refetchInteractions()
-        },
+          console.log(
+            "Save change detected, refreshing stats and interactions"
+          );
+          refetchStats();
+          refetchInteractions();
+        }
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(likesSubscription)
-      supabase.removeChannel(savesSubscription)
-    }
-  }, [foodId, refetchStats, refetchInteractions])
+      supabase.removeChannel(likesSubscription);
+      supabase.removeChannel(savesSubscription);
+    };
+  }, [foodId, refetchStats, refetchInteractions]);
 
   const handleLike = async () => {
     if (!isAuthenticated || !currentUserId || !food) {
-      Alert.alert("Authentication Required", "Please log in to like posts.")
-      return
+      Alert.alert("Authentication Required", "Please log in to like posts.");
+      return;
     }
 
     try {
@@ -348,17 +393,17 @@ export default function PostDetailScreen() {
         foodId,
         userId: currentUserId,
         isLiked: interactions.liked,
-      })
+      });
     } catch (error) {
-      console.error("Error toggling like:", error)
-      Alert.alert("Error", "Failed to update like. Please try again.")
+      console.error("Error toggling like:", error);
+      Alert.alert("Error", "Failed to update like. Please try again.");
     }
-  }
+  };
 
   const handleSave = async () => {
     if (!isAuthenticated || !currentUserId || !food) {
-      Alert.alert("Authentication Required", "Please log in to save posts.")
-      return
+      Alert.alert("Authentication Required", "Please log in to save posts.");
+      return;
     }
 
     try {
@@ -366,57 +411,57 @@ export default function PostDetailScreen() {
         foodId,
         userId: currentUserId,
         isSaved: interactions.saved,
-      })
+      });
     } catch (error) {
-      console.error("Error toggling save:", error)
-      Alert.alert("Error", "Failed to update save. Please try again.")
+      console.error("Error toggling save:", error);
+      Alert.alert("Error", "Failed to update save. Please try again.");
     }
-  }
+  };
 
   const handleSubmitComment = async () => {
     if (!isAuthenticated || !currentUserId || !foodId || !commentText.trim()) {
       if (!isAuthenticated || !currentUserId) {
-        Alert.alert("Authentication Required", "Please log in to comment.")
+        Alert.alert("Authentication Required", "Please log in to comment.");
       }
-      return
+      return;
     }
 
-    setSubmittingComment(true)
+    setSubmittingComment(true);
     try {
       await commentMutation.mutateAsync({
         foodId,
         userId: currentUserId,
         content: commentText.trim(),
-      })
+      });
     } catch (error) {
-      console.error("Error submitting comment:", error)
-      Alert.alert("Error", "Failed to submit comment. Please try again.")
+      console.error("Error submitting comment:", error);
+      Alert.alert("Error", "Failed to submit comment. Please try again.");
     } finally {
-      setSubmittingComment(false)
+      setSubmittingComment(false);
     }
-  }
+  };
 
   // Helper function to get skill level color
   const getSkillLevelColor = (level: string) => {
     switch (level) {
       case "Easy":
-        return "#4CAF50" // Green
+        return "#4CAF50"; // Green
       case "Medium":
-        return "#FFC107" // Amber
+        return "#FFC107"; // Amber
       case "Hard":
-        return "#F44336" // Red
+        return "#F44336"; // Red
       default:
-        return "#4CAF50" // Default to green
+        return "#4CAF50"; // Default to green
     }
-  }
+  };
 
   // Helper function to get skill level dots
   const renderSkillLevelDots = (level: string) => {
-    const totalDots = 3
-    let activeDots = 1
+    const totalDots = 3;
+    let activeDots = 1;
 
-    if (level === "Medium") activeDots = 2
-    if (level === "Hard") activeDots = 3
+    if (level === "Medium") activeDots = 2;
+    if (level === "Hard") activeDots = 3;
 
     return (
       <View style={{ flexDirection: "row", marginTop: 4 }}>
@@ -434,12 +479,12 @@ export default function PostDetailScreen() {
           />
         ))}
       </View>
-    )
-  }
+    );
+  };
 
   // Render recipe info card
   const renderRecipeInfoCard = ({ item }: { item: any }) => {
-    if (!food) return null
+    if (!food) return null;
 
     return (
       <View
@@ -451,38 +496,72 @@ export default function PostDetailScreen() {
           width: 160,
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 8,
+          }}
+        >
           {item.icon}
-          <Text style={{ marginLeft: 8, fontWeight: "bold", color: "#505050" }}>{item.title}</Text>
+          <Text style={{ marginLeft: 8, fontWeight: "bold", color: "#505050" }}>
+            {item.title}
+          </Text>
         </View>
         {item.customContent ? (
           item.customContent(food)
         ) : (
           <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-            <Text style={{ fontSize: 24, fontWeight: "bold", color: item.valueColor }}>{item.value(food)}</Text>
-            <Text style={{ marginLeft: 4, fontSize: 14, fontWeight: "500", color: "#606060" }}>{item.unit(food)}</Text>
+            <Text
+              style={{
+                fontSize: 24,
+                fontWeight: "bold",
+                color: item.valueColor,
+              }}
+            >
+              {item.value(food)}
+            </Text>
+            <Text
+              style={{
+                marginLeft: 4,
+                fontSize: 14,
+                fontWeight: "500",
+                color: "#606060",
+              }}
+            >
+              {item.unit(food)}
+            </Text>
           </View>
         )}
       </View>
-    )
-  }
+    );
+  };
 
-  const isLoading = isLoadingFood || isLoadingCreator || isLoadingStats || isLoadingInteractions || isLoadingComments
+  const isLoading =
+    isLoadingFood ||
+    isLoadingCreator ||
+    isLoadingStats ||
+    isLoadingInteractions ||
+    isLoadingComments;
 
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: "white" }}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
           <ActivityIndicator size="large" color="#ffd60a" />
         </View>
       </View>
-    )
+    );
   }
 
   if (foodError || !food) {
     return (
       <View style={{ flex: 1, backgroundColor: "white" }}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
           <Text style={{ fontSize: 18 }}>Post not found</Text>
           <TouchableOpacity
             style={{
@@ -498,38 +577,60 @@ export default function PostDetailScreen() {
           </TouchableOpacity>
         </View>
       </View>
-    )
+    );
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
       {/* Fixed Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 mt-11">
-            <TouchableOpacity 
-              className="bg-[#ffd60a] p-3 rounded-lg"
-              onPress={() => router.back()}
-            >
-              <Feather name="arrow-left" size={24} color="#bb0718" />
-            </TouchableOpacity>
-            
-            <Text className="text-2xl font-bold">Post</Text>
-            
-            <TouchableOpacity>
-              <Feather name="more-horizontal" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
+      <View className="flex-row items-center justify-between px-4 py-3 mt-11">
+        <TouchableOpacity
+          className="bg-[#ffd60a] p-3 rounded-lg"
+          onPress={() => router.back()}
+        >
+          <Feather name="arrow-left" size={24} color="#bb0718" />
+        </TouchableOpacity>
+
+        <Text className="text-2xl font-bold">Post</Text>
+
+        <TouchableOpacity onPress={() => router.push(`/food/${food.id}`)}>
+          <Feather name="external-link" size={24} color="#000" />
+        </TouchableOpacity>
+      </View>
 
       {/* Scrollable Content */}
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1"
-    >
-        <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        >
           {/* User info */}
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 }}>
-            <View style={{ width: 48, height: 48, backgroundColor: "#e0e0e0", borderRadius: 24, overflow: "hidden" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                backgroundColor: "#e0e0e0",
+                borderRadius: 24,
+                overflow: "hidden",
+              }}
+            >
               {foodCreator?.avatar_url ? (
-                <Image source={{ uri: foodCreator.avatar_url }} style={{ width: "100%", height: "100%" }} />
+                <Image
+                  source={{ uri: foodCreator.avatar_url }}
+                  style={{ width: "100%", height: "100%" }}
+                />
               ) : (
                 <View
                   style={{
@@ -540,8 +641,16 @@ export default function PostDetailScreen() {
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 18, fontWeight: "bold", color: "#606060" }}>
-                    {foodCreator?.username?.charAt(0).toUpperCase() || food.created_by?.charAt(0).toUpperCase() || "?"}
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: "bold",
+                      color: "#606060",
+                    }}
+                  >
+                    {foodCreator?.username?.charAt(0).toUpperCase() ||
+                      food.created_by?.charAt(0).toUpperCase() ||
+                      "?"}
                   </Text>
                 </View>
               )}
@@ -562,17 +671,38 @@ export default function PostDetailScreen() {
 
           {/* Food title and description */}
           <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
-            <Text style={{ fontSize: 30, fontWeight: "bold", marginBottom: 8 }}>{food.name}</Text>
-            <Text style={{ color: "#505050", marginBottom: 8, fontSize: 16, lineHeight: 24 }}>{food.description}</Text>
+            <Text style={{ fontSize: 30, fontWeight: "bold", marginBottom: 8 }}>
+              {food.name}
+            </Text>
+            <Text
+              style={{
+                color: "#505050",
+                marginBottom: 8,
+                fontSize: 16,
+                lineHeight: 24,
+              }}
+            >
+              {food.description}
+            </Text>
             <Text style={{ color: "#808080", fontSize: 14 }}>
               {new Date(food.created_at).toLocaleDateString()} -{" "}
-              {new Date(food.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {new Date(food.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </Text>
           </View>
 
           {/* Recipe Info Cards - Horizontal Scrollable */}
           <View style={{ paddingVertical: 16 }}>
-            <Text style={{ paddingHorizontal: 16, fontSize: 20, fontWeight: "bold", marginBottom: 12 }}>
+            <Text
+              style={{
+                paddingHorizontal: 16,
+                fontSize: 20,
+                fontWeight: "bold",
+                marginBottom: 12,
+              }}
+            >
               Recipe Details
             </Text>
             <FlatList
@@ -611,7 +741,9 @@ export default function PostDetailScreen() {
                 size={22}
                 color={interactions.liked ? "#E91E63" : "#333"}
               />
-              <Text style={{ marginLeft: 8, fontSize: 18, fontWeight: "500" }}>{stats.likes}</Text>
+              <Text style={{ marginLeft: 8, fontSize: 18, fontWeight: "500" }}>
+                {stats.likes}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -626,8 +758,14 @@ export default function PostDetailScreen() {
               }}
               onPress={handleSave}
             >
-              <Feather name="bookmark" size={22} color={interactions.saved ? "#ffd60a" : "#333"} />
-              <Text style={{ marginLeft: 8, fontSize: 18, fontWeight: "500" }}>Save</Text>
+              <Feather
+                name="bookmark"
+                size={22}
+                color={interactions.saved ? "#ffd60a" : "#333"}
+              />
+              <Text style={{ marginLeft: 8, fontSize: 18, fontWeight: "500" }}>
+                Save
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -655,10 +793,18 @@ export default function PostDetailScreen() {
                   borderRadius: 12,
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "bold", color: "#bb0718" }}>{stats.comments}</Text>
+                <Text
+                  style={{ fontSize: 12, fontWeight: "bold", color: "#bb0718" }}
+                >
+                  {stats.comments}
+                </Text>
               </View>
             </View>
-            <Feather name={showReviews ? "chevron-up" : "chevron-down"} size={20} color="#333" />
+            <Feather
+              name={showReviews ? "chevron-up" : "chevron-down"}
+              size={20}
+              color="#333"
+            />
           </TouchableOpacity>
 
           {showReviews && (
@@ -678,7 +824,10 @@ export default function PostDetailScreen() {
                         }}
                       >
                         {comment.user?.avatar_url ? (
-                          <Image source={{ uri: comment.user.avatar_url }} style={{ width: "100%", height: "100%" }} />
+                          <Image
+                            source={{ uri: comment.user.avatar_url }}
+                            style={{ width: "100%", height: "100%" }}
+                          />
                         ) : (
                           <View
                             style={{
@@ -689,8 +838,16 @@ export default function PostDetailScreen() {
                               justifyContent: "center",
                             }}
                           >
-                            <Text style={{ fontSize: 16, fontWeight: "bold", color: "white" }}>
-                              {comment.user?.username?.charAt(0).toUpperCase() ||
+                            <Text
+                              style={{
+                                fontSize: 16,
+                                fontWeight: "bold",
+                                color: "white",
+                              }}
+                            >
+                              {comment.user?.username
+                                ?.charAt(0)
+                                .toUpperCase() ||
                                 comment.user_id?.charAt(0).toUpperCase() ||
                                 "?"}
                             </Text>
@@ -700,18 +857,41 @@ export default function PostDetailScreen() {
 
                       {/* Comment bubble with username inside */}
                       <View style={{ flex: 1, marginLeft: 12 }}>
-                        <View style={{ backgroundColor: "#f0f0f0", padding: 12, borderRadius: 16 }}>
+                        <View
+                          style={{
+                            backgroundColor: "#f0f0f0",
+                            padding: 12,
+                            borderRadius: 16,
+                          }}
+                        >
                           {/* Username inside bubble */}
-                          <Text style={{ fontWeight: "bold", fontSize: 16, marginBottom: 4 }}>
-                            {comment.user?.username || comment.user?.full_name || "User"}
+                          <Text
+                            style={{
+                              fontWeight: "bold",
+                              fontSize: 16,
+                              marginBottom: 4,
+                            }}
+                          >
+                            {comment.user?.username ||
+                              comment.user?.full_name ||
+                              "User"}
                           </Text>
 
                           {/* Comment content */}
-                          <Text style={{ color: "#303030", lineHeight: 20 }}>{comment.content}</Text>
+                          <Text style={{ color: "#303030", lineHeight: 20 }}>
+                            {comment.content}
+                          </Text>
                         </View>
 
                         {/* Date below bubble */}
-                        <Text style={{ color: "#808080", fontSize: 12, marginTop: 4, marginLeft: 8 }}>
+                        <Text
+                          style={{
+                            color: "#808080",
+                            fontSize: 12,
+                            marginTop: 4,
+                            marginLeft: 8,
+                          }}
+                        >
                           {new Date(comment.created_at).toLocaleDateString()}
                         </Text>
                       </View>
@@ -721,8 +901,18 @@ export default function PostDetailScreen() {
               ) : (
                 <View style={{ paddingVertical: 32, alignItems: "center" }}>
                   <Feather name="message-circle" size={40} color="#e0e0e0" />
-                  <Text style={{ marginTop: 8, color: "#808080", textAlign: "center" }}>No reviews yet.</Text>
-                  <Text style={{ color: "#808080", textAlign: "center" }}>Be the first to comment!</Text>
+                  <Text
+                    style={{
+                      marginTop: 8,
+                      color: "#808080",
+                      textAlign: "center",
+                    }}
+                  >
+                    No reviews yet.
+                  </Text>
+                  <Text style={{ color: "#808080", textAlign: "center" }}>
+                    Be the first to comment!
+                  </Text>
                 </View>
               )}
             </View>
@@ -757,21 +947,37 @@ export default function PostDetailScreen() {
               style={{
                 padding: 12,
                 borderRadius: 24,
-                backgroundColor: commentText.trim() && isAuthenticated ? "#ffd60a" : "#e0e0e0",
+                backgroundColor:
+                  commentText.trim() && isAuthenticated ? "#ffd60a" : "#e0e0e0",
               }}
               onPress={handleSubmitComment}
-              disabled={submittingComment || !commentText.trim() || !isAuthenticated}
+              disabled={
+                submittingComment || !commentText.trim() || !isAuthenticated
+              }
             >
-              <Feather name="send" size={20} color={commentText.trim() && isAuthenticated ? "#bb0718" : "#666"} />
+              <Feather
+                name="send"
+                size={20}
+                color={
+                  commentText.trim() && isAuthenticated ? "#bb0718" : "#666"
+                }
+              />
             </TouchableOpacity>
           </View>
           {!isAuthenticated && (
-            <Text style={{ textAlign: "center", fontSize: 14, color: "#E91E63", marginTop: 4 }}>
+            <Text
+              style={{
+                textAlign: "center",
+                fontSize: 14,
+                color: "#E91E63",
+                marginTop: 4,
+              }}
+            >
               Please log in to comment
             </Text>
           )}
         </View>
       </KeyboardAvoidingView>
     </View>
-  )
+  );
 }
