@@ -111,7 +111,13 @@ const navigateToFoodDetail = (foodId: string) => {
 export default function HomeScreen() {
   const [imageProcessing, setImageProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: foodsData = [], isLoading, error } = useFoodsQuery();
+
+  const { profileData } = useUserProfile();
+  const {
+    data: foodsData = [],
+    isLoading: isLoadingFoods,
+    error: foodsError,
+  } = useFoodsQuery();
 
   const handleImageSelection = async (
     pickerFn:
@@ -206,7 +212,7 @@ export default function HomeScreen() {
       )}
 
       <View className="flex-row justify-between items-center px-6 pt-4 pb-2">
-        <Text className="text-3xl font-bold">Hi! Mr. Chef</Text>
+        <Text className="text-3xl font-bold">{greeting}</Text>
         <View className="bg-[#ffd60a] p-3 rounded-lg">
           <Ionicons name="settings-outline" size={24} color="black" />
         </View>
