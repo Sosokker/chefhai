@@ -25,7 +25,12 @@ export async function uploadImageToSupabase(imageBase64: string, imageType: stri
   const { data, error } = await supabase
     .storage
     .from("food")
-    .createSignedUrl(filePath, 31536000);
+    .createSignedUrl(filePath, 31536000, {
+      transform: {
+        width: 800,
+        height: 600,
+      }
+    });
 
   if (error) {
     console.error("[GET PUBLIC URL ERROR]", error);
