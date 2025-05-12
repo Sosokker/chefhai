@@ -343,7 +343,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ))}
         </View>
-
+        
         {/* Tab Content */}
         {isActiveLoading ? (
           <View className="items-center justify-center flex-1 py-8">
