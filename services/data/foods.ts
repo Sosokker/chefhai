@@ -227,3 +227,11 @@ export const insertGenAIResult = async (
 
   return { data: foodId, error: null };
 };
+
+export async function updateFoodSharing(foodId: string, isShared: boolean) {
+  return await supabase.from("foods").update({ is_shared: isShared }).eq("id", foodId)
+}
+
+export async function deleteFood(foodId: string) {
+  return await supabase.from("foods").delete().eq("id", foodId)
+}
